@@ -1,10 +1,10 @@
 import os
 import argparse
+from PIL import Image
 
 import torch
 import wandb
 import numpy as np
-import matplotlib.pyplot as plt
 import yaml
 
 import utils
@@ -75,14 +75,14 @@ one_hot = torch.tensor([[0, 0, 0, 0],
                         [0, 0, 1, 0],
                         [0, 1, 0, 0],
                         [1, 0, 0, 0]])
-env = environment.BlocksWorld_v4(gui=0, min_objects=2, max_objects=2)
+env = environment.BlocksWorld_v4(gui=1, min_objects=2, max_objects=2)
 
 img_out_path = "out/imgs"
 if not os.path.exists(img_out_path):
     os.makedirs(img_out_path)
 
 print()
-for n_action in range(1, 6):
+for n_action in range(2, 6):
     subsymbolic_success = 0
     symbolic_success = 0
     dict_success = 0
@@ -90,13 +90,13 @@ for n_action in range(1, 6):
     i = 0
     seed_num = 0
     while i < 100:
+        seed_num += 1
         skip = False
-        if not os.path.exists(os.path.join(img_out_path, str(n_action), str(i))):
-            os.makedirs(os.path.join(img_out_path, str(n_action), str(i)))
+        if not os.path.exists(os.path.join(img_out_path, str(n_action), str(seed_num))):
+            os.makedirs(os.path.join(img_out_path, str(n_action), str(seed_num)))
 
         np.random.seed(seed_num)
         env.reset()
-        seed_num += 1
 
         actions = []
         for _ in range(n_action):
@@ -114,9 +114,10 @@ for n_action in range(1, 6):
         init_str = utils.to_str_state(init_obj[0], init_rel[0])
 
         # act
-        print("Actions:", file=open(os.path.join(img_out_path, str(n_action), str(i), "actions.txt"), "w"))
+        print("Actions:", file=open(os.path.join(img_out_path, str(n_action), str(seed_num), "actions.txt"), "w"))
+        all_imgs = []
         for j, action in enumerate(actions):
-            print(action, file=open(os.path.join(img_out_path, str(n_action), str(i), "actions.txt"), "a"))
+            print(action, file=open(os.path.join(img_out_path, str(n_action), str(seed_num), "actions.txt"), "a"))
             action = [int(x) for x in action.split(",")]
             _, effect, _, images = env.step(action[0], action[3], action[1], action[2], action[4], action[5],
                                             rotated_grasp=1, rotated_release=1, get_images=True)
@@ -127,17 +128,19 @@ for n_action in range(1, 6):
             if effect[action[0], 2] < 0.1:
                 skip = True
                 break
+            all_imgs.append(images)
 
+        for j, images in enumerate(all_imgs):
             for k, img in enumerate(images):
-                plt.imshow(img)
-                plt.savefig(os.path.join(img_out_path, str(n_action), str(i), f"{j}_{k}.png"))
+                Image.fromarray(img).save(os.path.join(img_out_path, str(n_action), str(seed_num), f"{j}_{k}.png"))
 
         if skip:
+            os.system(f"rm -rf {img_out_path}/{n_action}/{seed_num}")
             continue
 
         # final state
         poses, types = env.state()
-        print(poses[:, :3], types, file=open(os.path.join(img_out_path, str(n_action), str(i), "objects.txt"), "w"))
+        print(poses[:, :3], types, file=open(os.path.join(img_out_path, str(n_action), str(seed_num), "objects.txt"), "w"))
         state = torch.tensor(np.hstack([poses, types.reshape(-1, 1)]))
         goal_state = torch.cat([state[:, :-1], one_hot[[state[:, -1].long()]]], dim=-1)
         with torch.no_grad():
@@ -210,10 +213,10 @@ for n_action in range(1, 6):
 
         if subsym_init.is_terminal():
             subsymbolic_success += 1
-            os.system(f"rm -rf {img_out_path}/{n_action}/{i}")
+            os.system(f"rm -rf {img_out_path}/{n_action}/{seed_num}")
         else:
-            print(subsym_init.state[:, :3], file=open(os.path.join(img_out_path, str(n_action), str(i), "state.txt"), "w"))
-            print(subsym_init.goal[:, :3], file=open(os.path.join(img_out_path, str(n_action), str(i), "state.txt"), "a"))
+            print(subsym_init.state[:, :3], file=open(os.path.join(img_out_path, str(n_action), str(seed_num), "state.txt"), "w"))
+            print(subsym_init.goal[:, :3], file=open(os.path.join(img_out_path, str(n_action), str(seed_num), "state.txt"), "a"))
 
         # if sym_init.is_terminal():
         #     symbolic_success += 1
