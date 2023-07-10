@@ -1,0 +1,16 @@
+*.sublime-workspace
+__pycache__
+
+data
+save
+out
+lightning_logs
+
+.ipynb_checkpoints
+*.ipynb
+.DS_Store
+.vscode
+
+*.out
+*.png
+*.yaml
