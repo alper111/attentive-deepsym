@@ -499,9 +499,10 @@ class BlocksWorld_v4(BlocksWorld):
         if get_images:
             images.append(utils.get_image(self._p, eye_position=eye_position, target_position=target_position,
                                           up_vector=up_vector, height=256, width=256)[0])
+        self.init_agent_pose(t=1.0, sleep=sleep)
+        self.agent._waitsleep(2)
         state4, _ = self.state()
         effect = np.concatenate([state2 - state1, state4 - state3], axis=1)
-        self.init_agent_pose(t=1.0, sleep=sleep)
         if get_images:
             return state1, effect, types, images
 
