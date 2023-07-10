@@ -155,6 +155,7 @@ class AttentiveDeepSym(DeepSym):
         self.attention = attention
         self.pre_attention = pre_attention
         self.module_names += ["post_encoder", "attention", "pre_attention"]
+        self.save_hyperparameters(ignore=self.module_names)
 
     def encode(self, x: torch.Tensor, eval_mode=False) -> torch.Tensor:
         """

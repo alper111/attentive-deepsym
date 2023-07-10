@@ -4,6 +4,7 @@ import argparse
 import torch
 import yaml
 import lightning.pytorch as pl
+from lightning.pytorch.loggers import WandbLogger
 
 import utils
 from dataset import StateActionEffectDataset
@@ -22,5 +23,8 @@ val_set = StateActionEffectDataset(config["dataset_name"], split="val")
 train_loader = torch.utils.data.DataLoader(train_set, batch_size=config["batch_size"], shuffle=True)
 val_loader = torch.utils.data.DataLoader(val_set, batch_size=config["batch_size"])
 
-trainer = pl.Trainer(max_epochs=config["epoch"], gradient_clip_val=1.0)
+logger = WandbLogger(project="attentive-deepsym", config=config, log_model=True, save_dir="wandb")
+checkpoint_callback = pl.callbacks.ModelCheckpoint(monitor="val_loss", mode="min")
+trainer = pl.Trainer(max_epochs=config["epoch"], gradient_clip_val=1.0,
+                     callbacks=[checkpoint_callback], logger=logger)
 trainer.fit(model, train_loader, val_loader)
