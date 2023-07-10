@@ -43,7 +43,9 @@ def draw_attention(env, attention, head, active_selector, obj):
     for i in range(min, max):
         for k in range(0, env.num_objects):
             if attention[i, k] == active_selector:
-                attention_arrow_ids.append(utils.create_arrow(env._p, env.get_obj_location(i), env.get_obj_location(k), color=colors[i % len(colors)]))
+                attention_arrow_ids.append(utils.create_arrow(env._p, env.get_obj_location(i),
+                                                              env.get_obj_location(k),
+                                                              color=colors[i % len(colors)]))
 
 
 def draw_attention_loop(env, attention_maps):
