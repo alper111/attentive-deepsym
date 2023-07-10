@@ -186,8 +186,8 @@ for name in model.module_names:
     getattr(model, name).eval()
 
 
-env = environment.BlocksWorld_v4(gui=1, min_objects=5, max_objects=5)
-np.random.seed(200 + int(sys.argv[2]))
+env = environment.BlocksWorld_v4(gui=1, min_objects=2, max_objects=2)
+np.random.seed(int(sys.argv[2]))
 env.reset()
 parameter_ids["head"] = env._p.addUserDebugParameter("attention_heads", 0, config["n_attention_heads"]-1, 0)
 parameter_ids["01"] = env._p.addUserDebugParameter("0/1 selector", 0, -1, 0)
