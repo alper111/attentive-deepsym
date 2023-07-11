@@ -2,7 +2,11 @@ import time
 import os
 import argparse
 import subprocess
+import zipfile
 from multiprocessing import Process
+
+import torch
+import wandb
 
 
 def collect(script, num, t, folder, idx):
@@ -35,3 +39,26 @@ if __name__ == "__main__":
     print(args.N, file=open(os.path.join(args.d, "info.txt"), "w"))
     print(args.p, file=open(os.path.join(args.d, "info.txt"), "a"))
     print(f"Collected {args.p*args.N} samples in {elapsed:.2f} seconds. {args.p*args.N/elapsed}")
+    print("Merging rolls...")
+    keys = ["action", "effect", "mask", "state", "post_state"]
+    for key in keys:
+        field = []
+        for i in range(args.p):
+            field.append(torch.load(os.path.join(args.d, f"{key}_{i}.pt")))
+        field = torch.cat(field, dim=0)
+        torch.save(field, os.path.join(args.d, f"{key}.pt"))
+        for i in range(args.p):
+            os.remove(os.path.join(args.d, f"{key}_{i}.pt"))
+    print("Done.")
+
+    print("Uploading dataset to wandb as an artifact...")
+    name = args.d.split("/")[-1]  # take the last part of the path
+    with zipfile.ZipFile(f"{name}.zip", "w", zipfile.ZIP_DEFLATED) as zipf:
+        for file in os.listdir(args.d):
+            if file != ".DS_Store":
+                zipf.write(os.path.join(args.d, file), arcname=file)
+    wandb.init(project="attentive-deepsym", entity=wandb.api.default_entity, name=name+"_dataset")
+    artifact = wandb.Artifact(name, type="dataset")
+    artifact.add_file(f"{name}.zip")
+    wandb.log_artifact(artifact)
+    os.remove(f"{name}.zip")
