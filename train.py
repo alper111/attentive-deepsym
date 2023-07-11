@@ -6,7 +6,7 @@ import yaml
 import lightning.pytorch as pl
 from lightning.pytorch.loggers import WandbLogger
 
-import utils
+from models import AttentiveDeepSym
 from dataset import StateActionEffectDataset
 
 parser = argparse.ArgumentParser("Train DeepSym.")
@@ -16,15 +16,15 @@ args = parser.parse_args()
 with open(args.config, "r") as f:
     config = yaml.safe_load(f)
 
-model = utils.create_model_from_config(config)
+model = AttentiveDeepSym(config)
 
 train_set = StateActionEffectDataset(config["dataset_name"], split="train")
 val_set = StateActionEffectDataset(config["dataset_name"], split="val")
 train_loader = torch.utils.data.DataLoader(train_set, batch_size=config["batch_size"], shuffle=True)
 val_loader = torch.utils.data.DataLoader(val_set, batch_size=config["batch_size"])
 
-logger = WandbLogger(project="attentive-deepsym", config=config, log_model=True, save_dir="wandb")
-checkpoint_callback = pl.callbacks.ModelCheckpoint(monitor="val_loss", mode="min")
+logger = WandbLogger(name=config["name"], project="attentive-deepsym",
+                     config=config, log_model=True, save_dir="logs", id=config["name"])
 trainer = pl.Trainer(max_epochs=config["epoch"], gradient_clip_val=1.0,
-                     callbacks=[checkpoint_callback], logger=logger, devices=config["devices"])
+                     logger=logger, devices=config["devices"])
 trainer.fit(model, train_loader, val_loader)
