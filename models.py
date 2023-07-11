@@ -1,29 +1,41 @@
+import os
+
 import torch
+import wandb
 import lightning.pytorch as pl
+from lightning.pytorch.loggers import WandbLogger
+
+import blocks
 
 
 class DeepSym(pl.LightningModule):
     """DeepSym model from https://arxiv.org/abs/2012.02532"""
-    def __init__(self, encoder: torch.nn.Module, decoder: torch.nn.Module, lr: float, loss_coeff: float = 1.0):
+    def __init__(self, config):
         """
         Parameters
         ----------
-        encoder : torch.nn.Module
-            Encoder network.
-        decoder : torch.nn.Module
-            Decoder network.
-        lr : float
-            Learning rate.
-        loss_coeff : float
-            A hyperparameter to increase to speed of convergence when there
-            are lots of zero values in the effect prediction (e.g. tile puzzle).
+        config : dict
+            The configuration dictionary.
         """
         super(DeepSym, self).__init__()
-        self.encoder = encoder
-        self.decoder = decoder
-        self.module_names = ["encoder", "decoder"]
-        self.lr = lr
-        self.loss_coeff = loss_coeff
+        self.save_hyperparameters()
+        self._initialize_networks(config)
+        self.lr = config["lr"]
+        self.loss_coeff = config["loss_coeff"]
+
+    def _initialize_networks(self, config):
+        enc_layers = [config["state_dim"]] + \
+                     [config["hidden_dim"]]*config["n_hidden_layers"] + \
+                     [config["latent_dim"]]
+        self.encoder = torch.nn.Sequential(
+            blocks.MLP(enc_layers, batch_norm=config["batch_norm"]),
+            blocks.GumbelSigmoidLayer(hard=config["gumbel_hard"],
+                                      T=config["gumbel_t"])
+        )
+        dec_layers = [config["latent_dim"] + config["action_dim"]] + \
+                     [config["hidden_dim"]]*(config["n_hidden_layers"]) + \
+                     [config["effect_dim"]]
+        self.decoder = blocks.MLP(dec_layers, batch_norm=config["batch_norm"])
 
     def encode(self, x: torch.Tensor, eval_mode=False) -> torch.Tensor:
         """
@@ -138,24 +150,35 @@ class DeepSym(pl.LightningModule):
         return {"z": z, "e": e, "zn": zn}
 
     def configure_optimizers(self):
-        params = []
-        for name in self.module_names:
-            module = getattr(self, name)
-            for p in module.parameters():
-                params.append(p)
-        optimizer = torch.optim.Adam(lr=self.lr, params=params)
+        optimizer = torch.optim.Adam(lr=self.lr, params=self.parameters())
         return optimizer
 
 
 class AttentiveDeepSym(DeepSym):
-    def __init__(self, encoder: torch.nn.Module, decoder: torch.nn.Module, post_encoder: torch.nn.Module,
-                 attention: torch.nn.Module, pre_attention: torch.nn.Module, lr: float, loss_coeff: float = 1):
-        super(AttentiveDeepSym, self).__init__(encoder, decoder, lr, loss_coeff)
-        self.post_encoder = post_encoder
-        self.attention = attention
-        self.pre_attention = pre_attention
-        self.module_names += ["post_encoder", "attention", "pre_attention"]
-        self.save_hyperparameters(ignore=self.module_names)
+    def _initialize_networks(self, config):
+        enc_layers = [config["state_dim"]] + \
+                        [config["hidden_dim"]]*config["n_hidden_layers"] + \
+                        [config["latent_dim"]]
+        self.encoder = torch.nn.Sequential(
+            blocks.MLP(enc_layers, batch_norm=config["batch_norm"]),
+            blocks.GumbelSigmoidLayer(hard=config["gumbel_hard"],
+                                      T=config["gumbel_t"])
+        )
+        pre_att_layers = [config["state_dim"]] + \
+                         [config["hidden_dim"]]*config["n_hidden_layers"]
+        self.pre_attention = blocks.MLP(pre_att_layers, batch_norm=config["batch_norm"])
+        self.attention = blocks.GumbelAttention(in_dim=config["hidden_dim"],
+                                                out_dim=config["hidden_dim"],
+                                                num_heads=config["n_attention_heads"])
+
+        post_enc_layers = [config["latent_dim"]+config["action_dim"]] + \
+                          [config["hidden_dim"]]*config["n_hidden_layers"]
+        self.post_encoder = blocks.MLP(post_enc_layers, batch_norm=config["batch_norm"])
+
+        dec_layers = [config["hidden_dim"]*config["n_attention_heads"]] + \
+                     [config["hidden_dim"]]*(config["n_hidden_layers"]) + \
+                     [config["effect_dim"]]
+        self.decoder = blocks.MLP(dec_layers, batch_norm=config["batch_norm"])
 
     def encode(self, x: torch.Tensor, eval_mode=False) -> torch.Tensor:
         """
@@ -245,3 +268,16 @@ class AttentiveDeepSym(DeepSym):
         zn = self.encode(sn, eval_mode=True)
         rn = self.attn_weights(sn, pad_mask, eval_mode=True)
         return {"z": z, "r": r, "e": e, "zn": zn, "rn": rn}
+
+
+def load_model(name, tag="best"):
+    save_dir = os.path.join("logs", "attentive-deepsym", name)
+    model_path = os.path.join(save_dir, "model.ckpt")
+    if not os.path.exists(model_path):
+        print(f"Downloading model from wandb ({name})...")
+        WandbLogger.download_artifact(f"{wandb.api.default_entity}/attentive-deepsym/model-{name}:{tag}",
+                                      artifact_type="model",
+                                      save_dir=save_dir,
+                                      use_artifact=True)
+    model = AttentiveDeepSym.load_from_checkpoint(model_path)
+    return model
