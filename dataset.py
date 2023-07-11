@@ -2,27 +2,33 @@ import os
 
 import torch
 import wandb
+import lightning.pytorch as pl
 
 from utils import preprocess
 
 
-class SymbolForwardDataset(torch.utils.data.Dataset):
-    def __init__(self, path, prefix, wandb={}):
-        if len(wandb) == 0:
-            self.precond = torch.load(os.path.join(path, prefix+"Z.pt"))
-            self.effect = torch.load(os.path.join(path, prefix+"E.pt"))
-        else:
-            self.precond = torch.load(wandb["Z"].name)
-            self.effect = torch.load(wandb["E"].name)
-        self.mask = torch.load(os.path.join(path, prefix+"mask.pt"))
+class StateActionEffectDM(pl.LightningDataModule):
+    def __init__(self, name, batch_size=32, num_workers=0):
+        super().__init__()
+        self.name = name
+        self.batch_size = batch_size
+        self.num_workers = num_workers
 
-    def __len__(self):
-        return len(self.precond)
+    def prepare_data(self):
+        self.data_path = os.path.join("data", self.name)
+        artifact = wandb.use_artifact(f"{wandb.api.default_entity}/attentive-deepsym/{self.name}:latest", type="dataset")
+        if not os.path.exists(self.data_path):
+            artifact.download(root=self.data_path)
+        self.train_set = StateActionEffectDataset(self.name, split="train")
+        self.val_set = StateActionEffectDataset(self.name, split="val")
 
-    def __getitem__(self, idx):
-        mask = torch.zeros(self.precond[idx].shape[0])
-        mask[:self.mask[idx]] = 1.0
-        return self.precond[idx], self.effect[idx], mask
+    def train_dataloader(self):
+        return torch.utils.data.DataLoader(self.train_set, batch_size=self.batch_size,
+                                           num_workers=self.num_workers, shuffle=True)
+
+    def val_dataloader(self):
+        return torch.utils.data.DataLoader(self.val_set, batch_size=self.batch_size,
+                                           num_workers=self.num_workers)
 
 
 class StateActionEffectDataset(torch.utils.data.Dataset):
