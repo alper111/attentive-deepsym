@@ -132,14 +132,14 @@ class DeepSym(pl.LightningModule):
 
     def validation_step(self, batch, _):
         s, a, e, _, _ = batch
-        _, e_pred = self.forward(s, a, eval_mode=True)
+        _, e_pred = self.forward(s, a)
         loss = torch.nn.functional.mse_loss(e_pred, e) * self.loss_coeff
         self.log("val_loss", loss, on_epoch=True, prog_bar=True)
         return loss
 
     def test_step(self, batch, _):
         s, a, e, _, _ = batch
-        _, e_pred = self.forward(s, a, eval_mode=True)
+        _, e_pred = self.forward(s, a)
         loss = torch.nn.functional.mse_loss(e_pred, e) * self.loss_coeff
         return loss
 
@@ -249,7 +249,7 @@ class AttentiveDeepSym(DeepSym):
 
     def validation_step(self, batch, _):
         s, a, e, pad_mask, _ = batch
-        _, _, e_pred = self.forward(s, a, pad_mask, eval_mode=True)
+        _, _, e_pred = self.forward(s, a, pad_mask)
         loss = torch.nn.functional.mse_loss(e_pred, e, reduction="none")
         loss = (loss * pad_mask.unsqueeze(2)).sum(dim=[1, 2]).mean() * self.loss_coeff
         self.log("val_loss", loss, on_epoch=True, prog_bar=True)
@@ -257,7 +257,7 @@ class AttentiveDeepSym(DeepSym):
 
     def test_step(self, batch, _):
         s, a, e, pad_mask, _ = batch
-        _, _, e_pred = self.forward(s, a, pad_mask, eval_mode=True)
+        _, _, e_pred = self.forward(s, a, pad_mask)
         loss = torch.nn.functional.mse_loss(e_pred, e, reduction="none")
         loss = (loss * pad_mask.unsqueeze(2)).sum(dim=[1, 2]).mean() * self.loss_coeff
         return loss
