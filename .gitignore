@@ -5,6 +5,7 @@ data
 save
 out
 lightning_logs
+logs
 wandb
 
 .ipynb_checkpoints
