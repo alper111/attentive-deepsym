@@ -269,6 +269,10 @@ class AttentiveDeepSym(DeepSym):
         rn = self.attn_weights(sn, pad_mask, eval_mode=True)
         return {"z": z, "r": r, "e": e, "zn": zn, "rn": rn}
 
+    def on_before_optimizer_step(self, optimizer):
+        norms = pl.utilities.grad_norm(self, norm_type=2)
+        self.log_dict(norms)
+
 
 def load_model(name, tag="best"):
     save_dir = os.path.join("logs", "attentive-deepsym", name)
