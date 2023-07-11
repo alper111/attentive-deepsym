@@ -1,4 +1,5 @@
 import os
+import zipfile
 
 import torch
 import wandb
@@ -19,6 +20,10 @@ class StateActionEffectDM(pl.LightningDataModule):
         artifact = wandb.use_artifact(f"{wandb.api.default_entity}/attentive-deepsym/{self.name}:latest", type="dataset")
         if not os.path.exists(self.data_path):
             artifact.download(root=self.data_path)
+            archive = zipfile.ZipFile(os.path.join(self.data_path, f"{self.name}.zip"), "r")
+            archive.extractall(self.data_path)
+            archive.close()
+            os.remove(os.path.join(self.data_path, f"{self.name}.zip"))
         self.train_set = StateActionEffectDataset(self.name, split="train")
         self.val_set = StateActionEffectDataset(self.name, split="val")
 
