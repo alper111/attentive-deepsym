@@ -48,11 +48,13 @@ for n_action in range(1, 6):
             a = env.full_random_action()
             actions.append(f"{a[0]},0,{a[3]},{a[1]},0,{a[5]}")
 
+        states = []
         # initial state
         poses, types = env.state()
         state = torch.tensor(np.hstack([poses, types.reshape(-1, 1)]))
         init_state = torch.cat([state[:, :-1], one_hot[[state[:, -1].long()]]], dim=-1)
-        torch.save(init_state, os.path.join(current_folder, "init_state.pt"))
+        states.append(init_state)
+        # torch.save(init_state, os.path.join(current_folder, "init_state.pt"))
 
         # act
         print("Actions:", file=open(os.path.join(current_folder, "actions.txt"), "w"))
@@ -62,10 +64,10 @@ for n_action in range(1, 6):
             action = [int(x) for x in action.split(",")]
             _, effect, _, images = env.step(action[0], action[3], action[1], action[2], action[4], action[5],
                                             rotated_grasp=1, rotated_release=1, get_images=True)
-
             poses, types = env.state()
             state = torch.tensor(np.hstack([poses, types.reshape(-1, 1)]))
             state = torch.cat([state[:, :-1], one_hot[[state[:, -1].long()]]], dim=-1)
+            states.append(state)
             if effect[action[0], 2] < 0.1:
                 skip = True
                 break
@@ -81,10 +83,6 @@ for n_action in range(1, 6):
         print(seed_num, file=open(os.path.join(current_folder, "seed.txt"), "w"))
 
         # final state
-        poses, types = env.state()
-        print(poses[:, :3], types, file=open(os.path.join(current_folder, "objects.txt"), "w"))
-        state = torch.tensor(np.hstack([poses, types.reshape(-1, 1)]))
-        goal_state = torch.cat([state[:, :-1], one_hot[[state[:, -1].long()]]], dim=-1)
-        torch.save(goal_state, os.path.join(current_folder, "goal_state.pt"))
+        torch.save(torch.stack(states), os.path.join(current_folder, "states.pt"))
         i += 1
         print(f"n_action={n_action}, i={i}, seed={seed_num}")
