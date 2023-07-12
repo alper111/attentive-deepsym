@@ -274,7 +274,7 @@ class AttentiveDeepSym(DeepSym):
         self.log_dict(norms)
 
 
-def load_model(name, tag="best"):
+def load_ckpt_from_wandb(name, tag="best"):
     save_dir = os.path.join("logs", "attentive-deepsym", name)
     model_path = os.path.join(save_dir, "model.ckpt")
     if not os.path.exists(model_path):
@@ -284,4 +284,15 @@ def load_model(name, tag="best"):
                                       save_dir=save_dir,
                                       use_artifact=True)
     model = AttentiveDeepSym.load_from_checkpoint(model_path)
-    return model
+    return model, model_path
+
+
+def load_ckpt(name, tag="best"):
+    save_dir = os.path.join("logs", "attentive-deepsym", name, "checkpoints")
+    if os.path.exists(save_dir):
+        ckpt = os.listdir(save_dir)[0]
+        ckpt_path = os.path.join(save_dir, ckpt)
+        model = AttentiveDeepSym.load_from_checkpoint(ckpt_path)
+    else:
+        model, ckpt_path = load_ckpt_from_wandb(name, tag)
+    return model, ckpt_path
