@@ -648,13 +648,10 @@ class SubsymbolicForwardModel(MCTSForward):
         action_placeholder = torch.zeros(state.state.shape[0], 8)  # (grasp_or_release, dx_loc, dy_loc, rot)
         action_placeholder[action[0], :4] = torch.tensor([1, action[1], action[2], 1], dtype=torch.float)
         action_placeholder[action[3], 4:] = torch.tensor([1, action[4], action[5], 1], dtype=torch.float)
-        inp = {
-            "state": state.state.unsqueeze(0),
-            "action": action_placeholder.unsqueeze(0),
-            "pad_mask": mask
-        }
         with torch.no_grad():
-            _, _, e = self.model.forward(inp, eval_mode=False)
+            _, _, e = self.model.forward(s=state.state.unsqueeze(0),
+                                         a=action_placeholder.unsqueeze(0),
+                                         pad_mask=mask)
             delta_pos = state.state[action[3]] - state.state[action[0]]
             dx, dy = delta_pos[0], delta_pos[1]
             dx += (-action[1] * 0.075) + (action[4] * 0.075)
