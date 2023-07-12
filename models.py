@@ -275,7 +275,7 @@ class AttentiveDeepSym(DeepSym):
 
 
 def load_ckpt_from_wandb(name, tag="best"):
-    save_dir = os.path.join("logs", "attentive-deepsym", name)
+    save_dir = os.path.join("logs", name)
     model_path = os.path.join(save_dir, "model.ckpt")
     if not os.path.exists(model_path):
         print(f"Downloading model from wandb ({name})...")
@@ -288,9 +288,15 @@ def load_ckpt_from_wandb(name, tag="best"):
 
 
 def load_ckpt(name, tag="best"):
-    save_dir = os.path.join("logs", "attentive-deepsym", name, "checkpoints")
+    save_dir = os.path.join("logs", name)
     if os.path.exists(save_dir):
-        ckpt = os.listdir(save_dir)[0]
+        ckpts = filter(lambda x: x.endswith(".ckpt"), os.listdir(save_dir))
+        if tag == "best":
+            for ckpt in ckpts:
+                if "last" not in ckpt:
+                    break
+        else:
+            ckpt = "last.ckpt"
         ckpt_path = os.path.join(save_dir, ckpt)
         model = AttentiveDeepSym.load_from_checkpoint(ckpt_path)
     else:
