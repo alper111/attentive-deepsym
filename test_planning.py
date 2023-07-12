@@ -16,7 +16,7 @@ forward_fn = mcts.SubsymbolicForwardModel(model)
 
 failed_cases = {1: [], 2: [], 3: [], 4: [], 5: []}
 one_step_fail = {1: [], 2: [], 3: [], 4: [], 5: []}
-for a in range(1, 5):
+for a in range(1, 6):
     success = 0
     os_success = 0
     folder = os.path.join("out", "imgs", str(a))
