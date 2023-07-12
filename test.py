@@ -1,11 +1,12 @@
 import sys
 
 import torch
-import wandb
 import numpy as np
 
+from models import load_ckpt
 import environment
 import utils
+import mcts
 
 text_items = {}
 state_debug_texts = []
@@ -177,21 +178,13 @@ def draw_action(env, z=None):
 
 
 run_id = sys.argv[1]
-run = wandb.init(entity="colorslab", project="multideepsym", resume="must", id=run_id)
-config = (dict(run.config))
-config["device"] = "cpu"
-model = utils.create_model_from_config(config)
-model.load("_best", from_wandb=True)
-model.print_model()
-
-for name in model.module_names:
-    getattr(model, name).eval()
-
+model, _ = load_ckpt(run_id, tag="best")
+forward_fn = mcts.SubsymbolicForwardModel(model)
 
 env = environment.BlocksWorld_v4(gui=1, min_objects=2, max_objects=2)
 np.random.seed(int(sys.argv[2]))
 env.reset()
-parameter_ids["head"] = env._p.addUserDebugParameter("attention_heads", 0, config["n_attention_heads"]-1, 0)
+parameter_ids["head"] = env._p.addUserDebugParameter("attention_heads", 0, 3, 0)
 parameter_ids["01"] = env._p.addUserDebugParameter("0/1 selector", 0, -1, 0)
 parameter_ids["obj"] = env._p.addUserDebugParameter("object selector", -1, env.max_objects, -1)
 parameter_ids["perform"] = env._p.addUserDebugParameter("perform action(click twice)", 0, -1, 0)
@@ -210,24 +203,27 @@ while True:
     state = torch.tensor(state)
     types = torch.tensor(types).reshape(-1, 1)
     state = torch.cat([torch.tensor(state), torch.tensor(types)], dim=-1)
-    state = torch.cat([state[:, :-1], one_hot[[state[:, -1].long()]]], dim=-1)
-    z = model.encode(state.unsqueeze(0), eval_mode=True)
+    state = torch.cat([state[:, :-1], one_hot[[state[:, -1].long()]]], dim=-1).unsqueeze(0)
+    init_st = mcts.SubsymbolicState(state[0], state[0])
+    pad_mask = torch.ones(1, state.shape[1])
+    z = model.encode(state, eval_mode=True)
     z = utils.binary_to_decimal(z[0, :, :].round())
     draw_single_symbols(env, z)
-    att_weights = model.attn_weights(state.unsqueeze(0), torch.ones(1, state.shape[0]), eval_mode=True)
+    att_weights = model.attn_weights(state, pad_mask, eval_mode=True)
     draw_attention_loop(env, att_weights[0])
     action, debug_texts = draw_action(env, z)
-    action_vector = torch.zeros(state.shape[0], 8, dtype=torch.float)
+    action_vector = torch.zeros(state.shape[1], 8, dtype=torch.float)
     action_vector[action[0], :4] = torch.tensor([1, action[2], action[3], action[6]], dtype=torch.float)
     action_vector[action[1], 4:] = torch.tensor([1, action[4], action[5], action[7]], dtype=torch.float)
-    sample = {"state": state.unsqueeze(0),
-              "action": action_vector.unsqueeze(0),
-              "pad_mask": torch.ones(1, state.shape[0])}
-    z, _, e_pred = model.forward(sample, eval_mode=True)
+    action_vector = action_vector.unsqueeze(0)
+    z, _, e_pred = model.forward(state, action_vector, pad_mask, eval_mode=True)
+    action_str = f"{action[0]},{action[2]},{action[3]},{action[1]},{action[4]},{action[5]}"
+    print(action_str)
+    print(forward_fn(init_st, action_str))
     print(e_pred[0, :, 2])
     e_pred = e_pred.detach()
     e_pred = e_pred.reshape(-1, 2, 3)
-    for e_i, s_i in zip(e_pred, state):
+    for e_i, s_i in zip(e_pred, state[0]):
         e_before, e_after = e_i
         from_before = s_i[:3].clone()
         from_after = s_i[:3].clone() + e_before[:3].clone()
