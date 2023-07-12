@@ -1,5 +1,6 @@
 """Train DeepSym"""
 import argparse
+import os
 
 import yaml
 import lightning.pytorch as pl
@@ -15,11 +16,13 @@ args = parser.parse_args()
 with open(args.config, "r") as f:
     config = yaml.safe_load(f)
 
-
+ckpt_callback = pl.callbacks.ModelCheckpoint(dirpath=os.path.join("logs", config["name"]),
+                                             save_last=True, save_top_k=1, monitor="val_loss",
+                                             mode="min")
 logger = WandbLogger(name=config["name"], project="attentive-deepsym",
                      config=config, log_model=True, save_dir="logs", id=config["name"])
 trainer = pl.Trainer(max_epochs=config["epoch"], gradient_clip_val=1.0,
-                     logger=logger, devices=config["devices"])
+                     logger=logger, devices=config["devices"], callbacks=[ckpt_callback])
 
 ckpt_path = None
 if config["resume"]:
