@@ -7,14 +7,6 @@ import numpy as np
 import environment
 
 
-def random_action(num_objects):
-    obj1 = np.random.randint(0, num_objects)
-    dx1 = np.random.randint(-1, 2)
-    obj2 = np.random.randint(0, num_objects)
-    dx2 = np.random.randint(-1, 2)
-    return f"{obj1},0,{dx1},{obj2},0,{dx2}"
-
-
 one_hot = torch.tensor([[0, 0, 0, 0],
                         [0, 0, 0, 1],
                         [0, 0, 1, 0],
