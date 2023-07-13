@@ -3,7 +3,7 @@ import os
 import argparse
 import subprocess
 import zipfile
-from multiprocessing import Process
+import multiprocessing as mp
 
 import torch
 import wandb
@@ -28,7 +28,8 @@ if __name__ == "__main__":
     procs = []
     start = time.time()
     for i in range(args.p):
-        p = Process(target=collect, args=[args.s, str(args.N), str(args.T), args.d, str(i)])
+        p = mp.get_context("spawn").Process(target=collect,
+                                            args=[args.s, str(args.N), str(args.T), args.d, str(i)])
         p.start()
         procs.append(p)
 
