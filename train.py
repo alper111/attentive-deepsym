@@ -21,7 +21,7 @@ ckpt_callback = pl.callbacks.ModelCheckpoint(dirpath=os.path.join("logs", config
                                              mode="min")
 logger = WandbLogger(name=config["name"], project="attentive-deepsym",
                      config=config, log_model=True, save_dir="logs", id=config["name"])
-trainer = pl.Trainer(max_epochs=config["epoch"], gradient_clip_val=1.0,
+trainer = pl.Trainer(max_epochs=config["epoch"], gradient_clip_val=10.0,
                      logger=logger, devices=config["devices"], callbacks=[ckpt_callback])
 
 ckpt_path = None
