@@ -216,9 +216,6 @@ while True:
     action_vector[action[0], :4] = torch.tensor([1, action[2], action[3], action[6]], dtype=torch.float)
     action_vector[action[1], 4:] = torch.tensor([1, action[4], action[5], action[7]], dtype=torch.float)
     action_vector = action_vector.unsqueeze(0)
-    with torch.no_grad():
-        z, _, e_pred = model.forward(state, action_vector, pad_mask, eval_mode=True)
-    e_pred = e_pred.reshape(-1, model.imle_k, 2, 3)
     action_str = f"{action[0]},{action[2]},{action[3]},{action[1]},{action[4]},{action[5]}"
     next_state = forward_fn(init_st, action_str)
     for obj_before, obj_after in zip(init_st.state, next_state.state):
