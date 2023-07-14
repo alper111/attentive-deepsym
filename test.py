@@ -216,22 +216,14 @@ while True:
     action_vector[action[0], :4] = torch.tensor([1, action[2], action[3], action[6]], dtype=torch.float)
     action_vector[action[1], 4:] = torch.tensor([1, action[4], action[5], action[7]], dtype=torch.float)
     action_vector = action_vector.unsqueeze(0)
-    z, _, e_pred = model.forward(state, action_vector, pad_mask, eval_mode=True)
+    with torch.no_grad():
+        z, _, e_pred = model.forward(state, action_vector, pad_mask, eval_mode=True)
+    e_pred = e_pred.reshape(-1, model.imle_k, 2, 3)
     action_str = f"{action[0]},{action[2]},{action[3]},{action[1]},{action[4]},{action[5]}"
-    print(action_str)
-    print(forward_fn(init_st, action_str))
-    print(e_pred[0, :, 2])
-    e_pred = e_pred.detach()
-    e_pred = e_pred.reshape(-1, 2, 3)
-    for e_i, s_i in zip(e_pred, state[0]):
-        e_before, e_after = e_i
-        from_before = s_i[:3].clone()
-        from_after = s_i[:3].clone() + e_before[:3].clone()
-        to_before = s_i[:3].clone()
-        to_before[2] = 0.9
-        to_after = to_before.clone() + e_after[:3].clone()
-        eff_arrow_ids.append(utils.create_arrow(env._p, from_before, from_after, color=[1.0, 0.0, 0.0, 0.75]))
-        eff_arrow_ids.append(utils.create_arrow(env._p, to_before, to_after, color=[0.0, 1.0, 0.0, 0.75]))
+    next_state = forward_fn(init_st, action_str)
+    for obj_before, obj_after in zip(init_st.state, next_state.state):
+        eff_arrow_ids.append(utils.create_arrow(env._p, obj_before[:3], obj_after[:3],
+                                                color=[1.0, 0.0, 0.0, 0.8]))
     env.step(*action)
     for debug_text in debug_texts:
         env._p.removeUserDebugItem(debug_text)
