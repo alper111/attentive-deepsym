@@ -9,11 +9,12 @@ from utils import preprocess
 
 
 class StateActionEffectDM(pl.LightningDataModule):
-    def __init__(self, name, batch_size=32, num_workers=0):
+    def __init__(self, name, batch_size=32, num_workers=0, obj_relative=False):
         super().__init__()
         self.name = name
         self.batch_size = batch_size
         self.num_workers = num_workers
+        self.obj_relative = obj_relative
 
     def prepare_data(self):
         self.data_path = os.path.join("data", self.name)
@@ -24,8 +25,8 @@ class StateActionEffectDM(pl.LightningDataModule):
             archive.extractall(self.data_path)
             archive.close()
             os.remove(os.path.join(self.data_path, f"{self.name}.zip"))
-        self.train_set = StateActionEffectDataset(self.name, split="train")
-        self.val_set = StateActionEffectDataset(self.name, split="val")
+        self.train_set = StateActionEffectDataset(self.name, split="train", obj_relative=self.obj_relative)
+        self.val_set = StateActionEffectDataset(self.name, split="val", obj_relative=self.obj_relative)
 
     def train_dataloader(self):
         return torch.utils.data.DataLoader(self.train_set, batch_size=self.batch_size,
@@ -37,8 +38,9 @@ class StateActionEffectDM(pl.LightningDataModule):
 
 
 class StateActionEffectDataset(torch.utils.data.Dataset):
-    def __init__(self, name, split="train"):
+    def __init__(self, name, split="train", obj_relative=False):
         path = os.path.join("data", name)
+        self.obj_relative = obj_relative
         self.state = torch.load(os.path.join(path, "state.pt"))
         self.action = torch.load(os.path.join(path, "action.pt"))
         self.effect = torch.load(os.path.join(path, "effect.pt"))
@@ -78,6 +80,9 @@ class StateActionEffectDataset(torch.utils.data.Dataset):
         a = self.action[idx]
         mask = self.mask[idx]
         state = torch.cat([state[:, :-1], self.binary[[state[:, -1].long()]]], dim=-1)
+        if self.obj_relative:
+            state[:, :3] = state[:, :3] - state[a[0], :3]  # just subtract the position
+
         post_state = self.post_state[idx]
         post_state = torch.cat([post_state[:, :-1], self.binary[[post_state[:, -1].long()]]], dim=-1)
         n_objects, _ = state.shape

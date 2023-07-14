@@ -30,5 +30,6 @@ if config["resume"]:
 else:
     model = AttentiveDeepSym(config)
 
-dm = StateActionEffectDM(config["dataset_name"], batch_size=config["batch_size"])
+dm = StateActionEffectDM(config["dataset_name"], batch_size=config["batch_size"],
+                         obj_relative=config["obj_relative"] if "obj_relative" in config else False)
 trainer.fit(model, datamodule=dm, ckpt_path=ckpt_path)
