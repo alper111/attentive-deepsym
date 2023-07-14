@@ -5,10 +5,11 @@ import pickle
 
 
 import torch
-import wandb
 import numpy as np
+import lightning.pytorch as pl
 
 import dataset
+from models import load_ckpt
 
 
 class Node:
@@ -545,19 +546,39 @@ def transform_tuple(nested_tuple, mapping):
     return tuple(transformed)
 
 
+def collate_preds(preds):
+    z_i, r_i, a, z_f, r_f, m = [], [], [], [], [], []
+    for pred in preds:
+        z_i.append(pred["z"])
+        r_i.append(pred["r"])
+        a.append(pred["a"])
+        z_f.append(pred["zn"])
+        r_f.append(pred["rn"])
+        m.append(pred["m"])
+    z_i = torch.cat(z_i).cpu().bool()
+    r_i = torch.cat(r_i).cpu().bool()
+    a = torch.cat(a).cpu().char()
+    z_f = torch.cat(z_f).cpu().bool()
+    r_f = torch.cat(r_f).cpu().bool()
+    m = torch.cat(m).cpu().bool()
+    return torch.utils.data.TensorDataset(z_i, r_i, a, z_f, r_f, m)
+
+
 if __name__ == "__main__":
     args = argparse.ArgumentParser()
-    args.add_argument("-i", type=str, required=True, help="Run id")
+    args.add_argument("-n", type=str, required=True, help="Experiment name")
     args.add_argument("-p", type=int, default=1, help="Number of processes")
     args = args.parse_args()
 
-    run = wandb.init(entity="colorslab", project="multideepsym", resume="must", id=args.i)
+    model, _ = load_ckpt(args.n, tag="best")
+    trainer = pl.Trainer(devices=[0])
+    cnt_trainloader = torch.utils.data.DataLoader(dataset.StateActionEffectDataset("blocks2_v2", "train"), batch_size=1024)
+    cnt_valloader = torch.utils.data.DataLoader(dataset.StateActionEffectDataset("blocks2_v2", "val"), batch_size=1024)
+    # compute the dataset
+    trainset = collate_preds(trainer.predict(model, cnt_trainloader))
+    valset = collate_preds(trainer.predict(model, cnt_valloader))
 
-    # load the dataset
-    trainset = dataset.load_symbol_dataset("train", run, "cpu")
-    valset = dataset.load_symbol_dataset("val", run, "cpu")
     trainloader = torch.utils.data.DataLoader(trainset, batch_size=1)
-
     train_effects, train_changed_indices, train_effect_classes = create_effect_classes(trainloader)
 
     train_class_to_effect = {v: k for k, v in train_effect_classes.items()}

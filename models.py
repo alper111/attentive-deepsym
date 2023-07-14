@@ -264,10 +264,11 @@ class AttentiveDeepSym(DeepSym):
 
     def predict_step(self, batch, _):
         s, a, _, pad_mask, sn = batch
-        z, r, e = self.forward(s, a, pad_mask, eval_mode=True)
+        z = self.encode(s, eval_mode=True)
+        r = self.attn_weights(s, pad_mask, eval_mode=True)
         zn = self.encode(sn, eval_mode=True)
         rn = self.attn_weights(sn, pad_mask, eval_mode=True)
-        return {"z": z, "r": r, "e": e, "zn": zn, "rn": rn}
+        return {"z": z, "r": r, "a": a, "zn": zn, "rn": rn, "m": pad_mask}
 
     def on_before_optimizer_step(self, optimizer):
         norms = pl.utilities.grad_norm(self, norm_type=2)
