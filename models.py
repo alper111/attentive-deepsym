@@ -147,10 +147,7 @@ class DeepSym(pl.LightningModule):
             effect.append(e[n_range.repeat_interleave(n_rest_obj), rest_idx].reshape(n_batch, n_rest_obj, -1))
         state = torch.cat(state, dim=1).reshape(n_batch, -1)
         effect = torch.cat(effect, dim=1).reshape(n_batch, -1)
-
-        action = torch.zeros(n_batch, 2, dtype=torch.float32)
-        action[:, 0] = a[n_range, from_obj_idx, 2]
-        action[:, 1] = a[n_range, to_obj_idx, 6]
+        action = torch.stack([a[n_range, from_obj_idx, 2], a[n_range, to_obj_idx, 6]], dim=1)
         return state, action, effect, pad_mask, None
 
     def loss(self, batch):
