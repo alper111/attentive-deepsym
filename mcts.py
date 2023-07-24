@@ -641,7 +641,7 @@ class SubsymbolicForwardModel(MCTSForward):
     def __init__(self, model):
         self.model = model
 
-    def __call__(self, state, action):
+    def __call__(self, state, action, obj_relative=False):
         n_objs = state.state.shape[0]
         mask = torch.ones(1, n_objs)
         action = torch.tensor([int(a_i) for a_i in action.split(",")])
@@ -649,7 +649,12 @@ class SubsymbolicForwardModel(MCTSForward):
         action_placeholder[action[0], :4] = torch.tensor([1, action[1], action[2], 1], dtype=torch.float)
         action_placeholder[action[3], 4:] = torch.tensor([1, action[4], action[5], 1], dtype=torch.float)
         with torch.no_grad():
-            _, _, e = self.model.forward(s=state.state.unsqueeze(0),
+            if obj_relative:
+                st = state.state.clone()
+                st[:, :3] = st[:, :3] - st[action[0], :3]
+            else:
+                st = state.state.clone()
+            _, _, e = self.model.forward(s=st.unsqueeze(0),
                                          a=action_placeholder.unsqueeze(0),
                                          pad_mask=mask)
             delta_pos = state.state[action[3]] - state.state[action[0]]
