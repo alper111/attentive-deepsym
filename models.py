@@ -305,3 +305,34 @@ def load_ckpt(name, tag="best"):
     else:
         model, ckpt_path = load_ckpt_from_wandb(name, tag)
     return model, ckpt_path
+
+
+class MultiDeepSym(AttentiveDeepSym):
+    def _initialize_networks(self, config):
+        enc_layers = [config["state_dim"]] + \
+                        [config["hidden_dim"]]*config["n_hidden_layers"] + \
+                        [config["latent_dim"]]
+        self.encoder = torch.nn.Sequential(
+            blocks.MLP(enc_layers, batch_norm=config["batch_norm"]),
+            blocks.GumbelSigmoidLayer(hard=config["gumbel_hard"],
+                                      T=config["gumbel_t"])
+        )
+
+        self.projector = torch.nn.Linear(config["state_dim"]+config["action_dim"], config["hidden_dim"])
+        tr_enc_layer = torch.nn.TransformerEncoderLayer(d_model=config["hidden_dim"], nhead=config["n_attention_heads"],
+                                                        batch_first=True)
+        # fix num_layers to 4 for now
+        self.attention = torch.nn.TransformerEncoder(tr_enc_layer, num_layers=4)
+        dec_layers = [config["hidden_dim"]*(config["n_hidden_layers"]-1)] + [config["effect_dim"]]
+        self.decoder = blocks.MLP(dec_layers, batch_norm=config["batch_norm"])
+
+    def aggregate(self, z: torch.Tensor, pad_mask: torch.Tensor) -> torch.Tensor:
+        z_proj = self.projector(z)
+        z_att = self.attention(z_proj, src_key_padding_mask=~pad_mask.bool())
+        return z_att
+
+    def forward(self, s: torch.Tensor, a: torch.Tensor, pad_mask: torch.Tensor, eval_mode=False):
+        z = self.concat(s, a, eval_mode)
+        z_att = self.aggregate(z, pad_mask)
+        e = self.decode(z_att, pad_mask)
+        return z, e
