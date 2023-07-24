@@ -145,7 +145,12 @@ def is_satisfied(sample, object_bindings, action_bindings, relation_bindings):
     obj_exists = True
     obj_possible_indices = {}
     for name in object_bindings:
-        indices = torch.where((o_i == object_bindings[name]).all(dim=1))[0]
+        val, direction = object_bindings[name]
+        if direction == 0:
+            indices = torch.where((o_i == val).all(dim=1))[0]
+        else:
+            indices = torch.where((o_i != val).any(dim=1))[0]
+
         if len(indices) > 0:
             obj_possible_indices[name] = indices
         else:
@@ -156,7 +161,11 @@ def is_satisfied(sample, object_bindings, action_bindings, relation_bindings):
     act_exists = True
     act_possible_indices = {}
     for name in action_bindings:
-        indices = torch.where((a == action_bindings[name]).all(dim=1))[0]
+        val, direction = action_bindings[name]
+        if direction == 0:
+            indices = torch.where((a == val).all(dim=1))[0]
+        else:
+            indices = torch.where((a != val).any(dim=1))[0]
         if len(indices) > 0:
             act_possible_indices[name] = indices
         else:
@@ -213,12 +222,17 @@ def is_satisfied(sample, object_bindings, action_bindings, relation_bindings):
     for binding in possible_bindings:
         binding_valid = True
         for (rel_idx, name1, name2) in relation_bindings:
-            val = relation_bindings[(rel_idx, name1, name2)]
+            val, direction = relation_bindings[(rel_idx, name1, name2)]
             name1_idx = binding[name1]
             name2_idx = binding[name2]
-            if r_i[rel_idx, name1_idx, name2_idx] != val:
-                binding_valid = False
-                break
+            if direction == 0:
+                if r_i[rel_idx, name1_idx, name2_idx] != val:
+                    binding_valid = False
+                    break
+            else:
+                if r_i[rel_idx, name1_idx, name2_idx] == val:
+                    binding_valid = False
+                    break
         if binding_valid:
             rel_filtered_bindings.append(binding)
     rel_exists = len(rel_filtered_bindings) > 0
@@ -243,8 +257,6 @@ def check_rule(object_bindings, action_bindings, relation_bindings,
             current_candidates = {}
             for binding in bindings:
                 variables = list(binding.keys())
-                # TODO: this should work for non-equalities as well
-                # think how to do that later
                 if sorted(tuple(v.item() for v in binding.values())) != sorted(tuple(unique_indices)):
                     continue
 
@@ -325,6 +337,7 @@ def calculate_best_split(node, loader, effects, effect_indices, unique_object_va
 
     # process argument list
     proc_args = []
+    right_args = []
 
     # bind a variable in action list to a new object value
     for act_var in act_var_list:
@@ -335,16 +348,22 @@ def calculate_best_split(node, loader, effects, effect_indices, unique_object_va
         # bind the variable to each object value
         for obj_val in unique_object_values:
             object_bindings = node.object_bindings.copy()
-            object_bindings[act_var] = obj_val
+            object_bindings[act_var] = (obj_val, 0)
             proc_args.append((object_bindings, node.action_bindings, node.relation_bindings,
                              loader, effects, effect_indices, node.gating))
+            right_object_bindings = node.object_bindings.copy()
+            right_object_bindings[act_var] = (obj_val, 1)
+            right_args.append((right_object_bindings, node.action_bindings, node.relation_bindings))
 
     # bind a new variable to a new object value
     for obj_val in unique_object_values:
         object_bindings = node.object_bindings.copy()
-        object_bindings[new_obj_name] = obj_val
+        object_bindings[new_obj_name] = (obj_val, 0)
         proc_args.append((object_bindings, node.action_bindings, node.relation_bindings,
                           loader, effects, effect_indices, node.gating))
+        right_object_bindings = node.object_bindings.copy()
+        right_object_bindings[new_obj_name] = (obj_val, 1)
+        right_args.append((right_object_bindings, node.action_bindings, node.relation_bindings))
 
     # bind a variable in object list to a new action value
     for obj_var in obj_var_list:
@@ -355,16 +374,22 @@ def calculate_best_split(node, loader, effects, effect_indices, unique_object_va
         # bind the variable to each action value
         for act_val in unique_action_values:
             action_bindings = node.action_bindings.copy()
-            action_bindings[obj_var] = act_val
+            action_bindings[obj_var] = (act_val, 0)
             proc_args.append((node.object_bindings, action_bindings, node.relation_bindings,
                               loader, effects, effect_indices, node.gating))
+            right_action_bindings = node.action_bindings.copy()
+            right_action_bindings[obj_var] = (act_val, 1)
+            right_args.append((node.object_bindings, right_action_bindings, node.relation_bindings))
 
     # bind a new variable to a new action value
     for act_val in unique_action_values:
         action_bindings = node.action_bindings.copy()
-        action_bindings[new_obj_name] = act_val
+        action_bindings[new_obj_name] = (act_val, 0)
         proc_args.append((node.object_bindings, action_bindings, node.relation_bindings,
                           loader, effects, effect_indices, node.gating))
+        right_action_bindings = node.action_bindings.copy()
+        right_action_bindings[new_obj_name] = (act_val, 1)
+        right_args.append((node.object_bindings, right_action_bindings, node.relation_bindings))
 
     # bind two variables in either object list or action list to a new relation value
     all_vars = list(set(obj_var_list + act_var_list))
@@ -380,15 +405,18 @@ def calculate_best_split(node, loader, effects, effect_indices, unique_object_va
 
                     # bind the relation to each value
                     relation_bindings = node.relation_bindings.copy()
-                    relation_bindings[key] = val
+                    relation_bindings[key] = (val, 0)
                     proc_args.append((node.object_bindings, node.action_bindings, relation_bindings,
                                       loader, effects, effect_indices, node.gating))
+                    right_relation_bindings = node.relation_bindings.copy()
+                    right_relation_bindings[key] = (val, 1)
+                    right_args.append((node.object_bindings, node.action_bindings, right_relation_bindings))
 
     with mp.get_context("spawn").Pool(num_procs) as pool:
         results = pool.starmap(check_rule, proc_args)
 
     best_binded = 0
-    for (left_counts, left_gating, right_counts, right_gating, total_binded), (args) in zip(results, proc_args):
+    for (left_counts, left_gating, right_counts, right_gating, total_binded), (args), (r_args) in zip(results, proc_args, right_args):
         left_entropy = calculate_entropy(left_counts)
         right_entropy = calculate_entropy(right_counts)
         impurity = (left_entropy * np.sum(left_gating) + right_entropy * np.sum(right_gating)) / node.gating.sum()
@@ -402,9 +430,9 @@ def calculate_best_split(node, loader, effects, effect_indices, unique_object_va
                              counts=left_counts,
                              gating=left_gating)
             right_node = Node(left=None, right=None,
-                              object_bindings={},
-                              action_bindings={},
-                              relation_bindings={},
+                              object_bindings=r_args[0].copy(),
+                              action_bindings=r_args[1].copy(),
+                              relation_bindings=r_args[2].copy(),
                               counts=right_counts,
                               gating=right_gating)
             best_impurity = impurity
