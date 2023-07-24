@@ -239,27 +239,29 @@ class AttentiveDeepSym(DeepSym):
         e = self.decode(z_att, pad_mask)
         return z, attn_weights, e
 
+    def loss(self, e_pred, e, pad_mask):
+        loss = torch.nn.functional.mse_loss(e_pred, e, reduction="none")
+        loss = (loss * pad_mask.unsqueeze(2)).sum(dim=[1, 2]).mean() * self.loss_coeff
+        return loss
+
     def training_step(self, batch, _):
         s, a, e, pad_mask, _ = batch
         _, _, e_pred = self.forward(s, a, pad_mask)
-        loss = torch.nn.functional.mse_loss(e_pred, e, reduction="none")
-        loss = (loss * pad_mask.unsqueeze(2)).sum(dim=[1, 2]).mean() * self.loss_coeff
+        loss = self.loss(e_pred, e, pad_mask)
         self.log("train_loss", loss, on_epoch=True, prog_bar=True)
         return loss
 
     def validation_step(self, batch, _):
         s, a, e, pad_mask, _ = batch
         _, _, e_pred = self.forward(s, a, pad_mask)
-        loss = torch.nn.functional.mse_loss(e_pred, e, reduction="none")
-        loss = (loss * pad_mask.unsqueeze(2)).sum(dim=[1, 2]).mean() * self.loss_coeff
+        loss = self.loss(e_pred, e, pad_mask)
         self.log("val_loss", loss, on_epoch=True, prog_bar=True)
         return loss
 
     def test_step(self, batch, _):
         s, a, e, pad_mask, _ = batch
         _, _, e_pred = self.forward(s, a, pad_mask)
-        loss = torch.nn.functional.mse_loss(e_pred, e, reduction="none")
-        loss = (loss * pad_mask.unsqueeze(2)).sum(dim=[1, 2]).mean() * self.loss_coeff
+        loss = self.loss(e_pred, e, pad_mask)
         return loss
 
     def predict_step(self, batch, _):
