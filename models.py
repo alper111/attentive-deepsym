@@ -318,7 +318,7 @@ class MultiDeepSym(AttentiveDeepSym):
                                       T=config["gumbel_t"])
         )
 
-        self.projector = torch.nn.Linear(config["state_dim"]+config["action_dim"], config["hidden_dim"])
+        self.projector = torch.nn.Linear(config["latent_dim"]+config["action_dim"], config["hidden_dim"])
         tr_enc_layer = torch.nn.TransformerEncoderLayer(d_model=config["hidden_dim"], nhead=config["n_attention_heads"],
                                                         batch_first=True)
         # fix num_layers to 4 for now
@@ -335,4 +335,4 @@ class MultiDeepSym(AttentiveDeepSym):
         z = self.concat(s, a, eval_mode)
         z_att = self.aggregate(z, pad_mask)
         e = self.decode(z_att, pad_mask)
-        return z, e
+        return z, z_att, e
