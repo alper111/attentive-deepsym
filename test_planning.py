@@ -3,14 +3,14 @@ import os
 
 import torch
 
-from models import load_ckpt
+from models import load_ckpt, DeepSym, MultiDeepSym
 import mcts
 
 parser = argparse.ArgumentParser("Test planning")
 parser.add_argument("-n", help="Experiment name", type=str)
 args = parser.parse_args()
 
-model, _ = load_ckpt(args.n, tag="best")
+model, _ = load_ckpt(args.n, model_type=MultiDeepSym, tag="best")
 model.freeze()
 forward_fn = mcts.SubsymbolicForwardModel(model)
 
@@ -19,7 +19,7 @@ one_step_errors = {1: [], 2: [], 3: [], 4: [], 5: []}
 for a in range(1, 6):
     success = 0
     os_success = 0
-    folder = os.path.join("out", "imgs3", str(a))
+    folder = os.path.join("out", "imgs2", str(a))
     for i in range(100):
         exp_folder = os.path.join(folder, str(i))
         states = torch.load(os.path.join(exp_folder, "states.pt"))
