@@ -140,13 +140,19 @@ class DeepSym(pl.LightningModule):
         n_range = torch.arange(n_batch)
 
         state = [s[n_range, from_obj_idx].unsqueeze(1), s[n_range, to_obj_idx].unsqueeze(1)]
-        effect = [e[n_range, from_obj_idx].unsqueeze(1), e[n_range, to_obj_idx].unsqueeze(1)]
+        if e is not None:
+            effect = [e[n_range, from_obj_idx].unsqueeze(1), e[n_range, to_obj_idx].unsqueeze(1)]
+        else:
+            effect = None
+
         if len(rest_idx) > 0:
             n_rest_obj = len(rest_idx) // n_batch
             state.append(s[n_range.repeat_interleave(n_rest_obj), rest_idx].reshape(n_batch, n_rest_obj, -1))
-            effect.append(e[n_range.repeat_interleave(n_rest_obj), rest_idx].reshape(n_batch, n_rest_obj, -1))
+            if e is not None:
+                effect.append(e[n_range.repeat_interleave(n_rest_obj), rest_idx].reshape(n_batch, n_rest_obj, -1))
         state = torch.cat(state, dim=1).reshape(n_batch, -1)
-        effect = torch.cat(effect, dim=1).reshape(n_batch, -1)
+        if e is not None:
+            effect = torch.cat(effect, dim=1).reshape(n_batch, -1)
         action = torch.stack([a[n_range, from_obj_idx, 2], a[n_range, to_obj_idx, 6]], dim=1)
         return state, action, effect, pad_mask, None
 
@@ -306,7 +312,7 @@ class AttentiveDeepSym(DeepSym):
         self.log_dict(norms)
 
 
-def load_ckpt_from_wandb(name, tag="best"):
+def load_ckpt_from_wandb(name, model_type=AttentiveDeepSym, tag="best"):
     save_dir = os.path.join("logs", name)
     model_path = os.path.join(save_dir, "model.ckpt")
     if not os.path.exists(model_path):
@@ -315,11 +321,11 @@ def load_ckpt_from_wandb(name, tag="best"):
                                       artifact_type="model",
                                       save_dir=save_dir,
                                       use_artifact=True)
-    model = AttentiveDeepSym.load_from_checkpoint(model_path)
+    model = model_type.load_from_checkpoint(model_path)
     return model, model_path
 
 
-def load_ckpt(name, tag="best"):
+def load_ckpt(name, model_type=AttentiveDeepSym, tag="best"):
     save_dir = os.path.join("logs", name)
     if os.path.exists(save_dir):
         ckpts = filter(lambda x: x.endswith(".ckpt"), os.listdir(save_dir))
@@ -330,9 +336,9 @@ def load_ckpt(name, tag="best"):
         else:
             ckpt = "last.ckpt"
         ckpt_path = os.path.join(save_dir, ckpt)
-        model = AttentiveDeepSym.load_from_checkpoint(ckpt_path)
+        model = model_type.load_from_checkpoint(ckpt_path)
     else:
-        model, ckpt_path = load_ckpt_from_wandb(name, tag)
+        model, ckpt_path = load_ckpt_from_wandb(name, model_type, tag)
     return model, ckpt_path
 
 
