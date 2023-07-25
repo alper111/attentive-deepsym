@@ -6,6 +6,7 @@ import numpy as np
 import torch
 
 import utils
+from models import DeepSym
 
 
 class Tree:
@@ -654,9 +655,13 @@ class SubsymbolicForwardModel(MCTSForward):
                 st[:, :3] = st[:, :3] - st[action[0], :3]
             else:
                 st = state.state.clone()
-            _, _, e = self.model.forward(s=st.unsqueeze(0),
-                                         a=action_placeholder.unsqueeze(0),
-                                         pad_mask=mask)
+
+            if type(self.model) == DeepSym:
+                s, a, _, m, _ = self.model._preprocess_batch((st.unsqueeze(0), action_placeholder.unsqueeze(0),
+                                                              None, mask, None))
+                e = self.model.forward(s=s, a=a, pad_mask=m)[-1]
+            else:
+                e = self.model.forward(s=st.unsqueeze(0), a=action_placeholder.unsqueeze(0), pad_mask=mask)[-1]
             delta_pos = state.state[action[3]] - state.state[action[0]]
             dx, dy = delta_pos[0], delta_pos[1]
             dx += (-action[1] * 0.075) + (action[4] * 0.075)
