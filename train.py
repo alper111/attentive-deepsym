@@ -26,7 +26,12 @@ trainer = pl.Trainer(max_epochs=config["epoch"], gradient_clip_val=10.0,
 
 ckpt_path = None
 if config["resume"]:
-    model, ckpt_path = load_ckpt(config["name"], tag="latest")
+    model_dict = {
+        "attentive": AttentiveDeepSym,
+        "multideepsym": MultiDeepSym,
+        "deepsym": DeepSym
+    }
+    model, ckpt_path = load_ckpt(config["name"], model_type=model_dict[config["model"]], tag="latest")
 else:
     if "model" not in config:
         model = AttentiveDeepSym(config)
