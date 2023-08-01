@@ -261,8 +261,11 @@ class MCTSNode:
         while (i < iter_limit) and (time_elapsed < time_limit):
             v_arr = self._tree_policy(n=n_proc)
             v_arr = [(v, default_depth_limit) for v in v_arr]
-            with mp.get_context('spawn').Pool(processes=n_proc) as pool:
-                rewards = pool.starmap(self._default_policy_wrapper, v_arr)
+            if n_proc == 1:
+                rewards = [v_arr[0][0]._default_policy(default_depth_limit)]
+            else:
+                with mp.get_context('spawn').Pool(processes=n_proc) as pool:
+                    rewards = pool.starmap(self._default_policy_wrapper, v_arr)
 
             for (v, _), r in zip(v_arr, rewards):
                 v._backup(r)
@@ -270,7 +273,7 @@ class MCTSNode:
             i += 1
             end = time.time()
             time_elapsed = end - start
-            if i > 1:
+            if i % 100 == 0:
                 node_count, depth = self._tree_stats()
                 print(f"Tree depth={depth}, node count={node_count}, "
                       f"node/sec={(node_count-start_node_count)/time_elapsed:.2f}, "
@@ -603,7 +606,7 @@ class SymbolicState(MCTSState):
 class SubsymbolicState(MCTSState):
     threshold = 0.025
     available_actions = []
-    n_obj = 5
+    n_obj = 2
     for i in range(n_obj):
         for iy in range(-1, 2):
             for j in range(n_obj):
