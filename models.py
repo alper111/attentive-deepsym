@@ -175,8 +175,10 @@ class DeepSym(pl.LightningModule):
         return loss
 
     def test_step(self, batch, _):
-        loss = self.loss(batch)
-        return loss
+        s, a, e, pad_mask, _ = self._preprocess_batch(batch)
+        _, e_pred = self.forward(s, a, pad_mask)
+        e = e.reshape(e_pred.shape)
+        return (e - e_pred).abs()
 
     def predict_step(self, batch, _):
         s, a, _, _, sn = batch
@@ -296,8 +298,7 @@ class AttentiveDeepSym(DeepSym):
     def test_step(self, batch, _):
         s, a, e, pad_mask, _ = batch
         _, _, e_pred = self.forward(s, a, pad_mask)
-        loss = self.loss(e_pred, e, pad_mask)
-        return loss
+        return (e - e_pred).abs()
 
     def predict_step(self, batch, _):
         s, a, _, pad_mask, sn = batch
