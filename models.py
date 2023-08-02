@@ -138,6 +138,8 @@ class DeepSym(pl.LightningModule):
         _, to_obj_idx = torch.where(a[:, :, 4] > 0.5)
         _, rest_idx = torch.where((a[:, :, 0] < 0.5) & (a[:, :, 4] < 0.5))
         n_range = torch.arange(n_batch)
+        permutation = torch.cat([from_obj_idx, to_obj_idx, rest_idx])
+        inv_perm = torch.argsort(permutation)
 
         state = [s[n_range, from_obj_idx].unsqueeze(1), s[n_range, to_obj_idx].unsqueeze(1)]
         if e is not None:
@@ -154,7 +156,7 @@ class DeepSym(pl.LightningModule):
         if e is not None:
             effect = torch.cat(effect, dim=1).reshape(n_batch, -1)
         action = torch.stack([a[n_range, from_obj_idx, 2], a[n_range, to_obj_idx, 6]], dim=1)
-        return state, action, effect, pad_mask, None
+        return state, action, effect, pad_mask, inv_perm
 
     def loss(self, batch):
         s, a, e, pad_mask, _ = self._preprocess_batch(batch)
