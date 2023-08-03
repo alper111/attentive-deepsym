@@ -147,10 +147,10 @@ def create_arrow(p, from_loc, to_loc, color=[0.0, 1.0, 1.0, 0.75]):
 
     baseVisualId = p.createVisualShape(shapeType=p.GEOM_SPHERE, radius=0.01,
                                        rgbaColor=[0.0, 0.0, 1.0, 0.75])
-    childVisualId = p.createVisualShape(shapeType=p.GEOM_CAPSULE, radius=0.01, length=length,
+    childVisualId = p.createVisualShape(shapeType=p.GEOM_CAPSULE, radius=0.0075, length=length,
                                         rgbaColor=color)
     tipVisualId = p.createVisualShape(shapeType=p.GEOM_SPHERE, radius=0.01,
-                                      rgbaColor=[1.0, 0.0, 0.0, 0.75])
+                                      rgbaColor=[1.0, 0.0, 1.0, 0.75])
     obj_id = p.createMultiBody(baseMass=0, baseCollisionShapeIndex=-1, baseVisualShapeIndex=baseVisualId,
                                basePosition=from_loc, baseOrientation=[0., 0., 0., 1], linkMasses=[-1, -1],
                                linkCollisionShapeIndices=[-1, -1], linkVisualShapeIndices=[childVisualId, tipVisualId],
