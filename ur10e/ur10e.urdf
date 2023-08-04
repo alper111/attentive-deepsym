@@ -9,28 +9,46 @@
   Contributers: Jimmy Da Silva, Ajit Krisshna N L, Muhammad Asif Rana
 -->
 
-  <material name="LightGrey">
-    <color rgba="0.4 0.4 0.4 1.0"/>
+  <material name="BlackMat">
+    <color rgba="0.03310248 0.03310248 0.03310248 1"/>
   </material>
-
-  <material name="LightBlue">
-    <color rgba="0.1 0.5 0.8 1.0"/>
+  <material name="JointGrey">
+    <color rgba="0.2784314 0.2784314 0.2784314 1"/>
   </material>
-
-  <material name="DarkGrey">
-    <color rgba="0.4 0.4 0.4 1.0"/>
+  <material name="URBlue">
+    <color rgba="0.4901961 0.6784314 0.8 1"/>
   </material>
-
+  <material name="LinkGrey">
+    <color rgba="0.8203922 0.8203922 0.8203922 1"/>
+  </material>
   <material name="panda_white">
-    <color rgba="0.2 0.2 0.2 1."/>
+    <color rgba="0.2784314 0.2784314 0.2784314 1"/>
   </material>
 
+  <link name="base1">
+    <visual>
+      <geometry>
+        <mesh filename="visual/base1.dae"/>
+      </geometry>
+      <material name="BlackMat"/>
+    </visual>
+    <inertial>
+      <mass value="0.0"/>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <inertia ixx="0.0" ixy="0.0" ixz="0.0" iyy="0.0" iyz="0.0" izz="0.0"/>
+    </inertial>
+  </link>
+  <joint name="base1-base_link_fixed_joint" type="fixed">
+    <parent link="base1"/>
+    <child link="base_link"/>
+    <origin rpy="0 0 0" xyz="0 0 0"/>
+  </joint>
   <link name="base_link">
     <visual>
       <geometry>
-        <mesh filename="visual/base.dae"/>
+        <mesh filename="visual/base2.dae"/>
       </geometry>
-      <material name="LightGrey"/>
+      <material name="JointGrey"/>
     </visual>
     <collision>
       <geometry>
@@ -55,9 +73,9 @@
   <link name="shoulder_link">
     <visual>
       <geometry>
-        <mesh filename="visual/shoulder.dae"/>
+        <mesh filename="visual/shoulder1.dae"/>
       </geometry>
-      <material name="DarkGrey"/>
+      <material name="BlackMat"/>
     </visual>
     <collision>
       <geometry>
@@ -68,6 +86,40 @@
       <mass value="7.778"/>
       <origin rpy="0 0 0" xyz="0.0 0.0 0.0"/>
       <inertia ixx="0.03147431257693659" ixy="0.0" ixz="0.0" iyy="0.03147431257693659" iyz="0.0" izz="0.021875624999999996"/>
+    </inertial>
+  </link>
+  <joint name="shoulder_link-shoulder2_fixed_joint" type="fixed">
+    <parent link="shoulder_link"/>
+    <child link="shoulder2"/>
+  </joint>
+  <link name="shoulder2">
+    <visual>
+      <geometry>
+        <mesh filename="visual/shoulder2.dae"/>
+      </geometry>
+      <material name="URBlue"/>
+    </visual>
+    <inertial>
+      <mass value="0.0"/>
+      <origin rpy="0 0 0" xyz="0.0 0.0 0.0"/>
+      <inertia ixx="0.0" ixy="0.0" ixz="0.0" iyy="0.0" iyz="0.0" izz="0.0"/>
+    </inertial>
+  </link> 
+  <joint name="shoulder_link-shoulder3_fixed_joint" type="fixed">
+    <parent link="shoulder_link"/>
+    <child link="shoulder3"/>
+  </joint>
+  <link name="shoulder3">
+    <visual>
+      <geometry>
+        <mesh filename="visual/shoulder3.dae"/>
+      </geometry>
+      <material name="JointGrey"/>
+    </visual>
+    <inertial>
+      <mass value="0.0"/>
+      <origin rpy="0 0 0" xyz="0.0 0.0 0.0"/>
+      <inertia ixx="0.0" ixy="0.0" ixz="0.0" iyy="0.0" iyz="0.0" izz="0.0"/>
     </inertial>
   </link>
   <joint name="shoulder_lift_joint" type="revolute">
@@ -81,9 +133,9 @@
   <link name="upper_arm_link">
     <visual>
       <geometry>
-        <mesh filename="visual/upperarm.dae"/>
+        <mesh filename="visual/upperarm1.dae"/>
       </geometry>
-      <material name="LightGrey"/>
+      <material name="URBlue"/>
     </visual>
     <collision>
       <geometry>
@@ -94,6 +146,125 @@
       <mass value="12.93"/>
       <origin rpy="0 0 0" xyz="0.0 0.0 0.3065"/>
       <inertia ixx="0.4230737407704359" ixy="0.0" ixz="0.0" iyy="0.4230737407704359" iyz="0.0" izz="0.03636562499999999"/>
+    </inertial>
+  </link>
+  <joint name="upper_arm_link-upperarm2_fixed_joint" type="fixed">
+    <parent link="upper_arm_link"/>
+    <child link="upperarm2"/>
+  </joint>
+  <link name="upperarm2">
+    <visual>
+      <geometry>
+        <mesh filename="visual/upperarm2.dae"/>
+      </geometry>
+      <material name="URBlue"/>
+    </visual>
+    <inertial>
+      <mass value="0.0"/>
+      <origin rpy="0 0 0" xyz="0.0 0.0 0.0"/>
+      <inertia ixx="0.0" ixy="0.0" ixz="0.0" iyy="0.0" iyz="0.0" izz="0.0"/>
+    </inertial>
+  </link>
+  <joint name="upper_arm_link-upperarm3_fixed_joint" type="fixed">
+    <parent link="upper_arm_link"/>
+    <child link="upperarm3"/>
+  </joint>
+  <link name="upperarm3">
+    <visual>
+      <geometry>
+        <mesh filename="visual/upperarm3.dae"/>
+      </geometry>
+      <material name="JointGrey"/>
+    </visual>
+    <inertial>
+      <mass value="0.0"/>
+      <origin rpy="0 0 0" xyz="0.0 0.0 0.0"/>
+      <inertia ixx="0.0" ixy="0.0" ixz="0.0" iyy="0.0" iyz="0.0" izz="0.0"/>
+    </inertial>
+  </link>
+  <joint name="upper_arm_link-upperarm4_fixed_joint" type="fixed">
+    <parent link="upper_arm_link"/>
+    <child link="upperarm4"/>
+  </joint>
+  <link name="upperarm4">
+    <visual>
+      <geometry>
+        <mesh filename="visual/upperarm4.dae"/>
+      </geometry>
+      <material name="BlackMat"/>
+    </visual>
+    <inertial>
+      <mass value="0.0"/>
+      <origin rpy="0 0 0" xyz="0.0 0.0 0.0"/>
+      <inertia ixx="0.0" ixy="0.0" ixz="0.0" iyy="0.0" iyz="0.0" izz="0.0"/>
+    </inertial>
+  </link>
+  <joint name="upper_arm_link-upperarm5_fixed_joint" type="fixed">
+    <parent link="upper_arm_link"/>
+    <child link="upperarm5"/>
+  </joint>
+  <link name="upperarm5">
+    <visual>
+      <geometry>
+        <mesh filename="visual/upperarm5.dae"/>
+      </geometry>
+      <material name="JointGrey"/>
+    </visual>
+    <inertial>
+      <mass value="0.0"/>
+      <origin rpy="0 0 0" xyz="0.0 0.0 0.0"/>
+      <inertia ixx="0.0" ixy="0.0" ixz="0.0" iyy="0.0" iyz="0.0" izz="0.0"/>
+    </inertial>
+  </link>
+  <joint name="upper_arm_link-upperarm6_fixed_joint" type="fixed">
+    <parent link="upper_arm_link"/>
+    <child link="upperarm6"/>
+  </joint>
+  <link name="upperarm6">
+    <visual>
+      <geometry>
+        <mesh filename="visual/upperarm6.dae"/>
+      </geometry>
+      <material name="BlackMat"/>
+    </visual>
+    <inertial>
+      <mass value="0.0"/>
+      <origin rpy="0 0 0" xyz="0.0 0.0 0.0"/>
+      <inertia ixx="0.0" ixy="0.0" ixz="0.0" iyy="0.0" iyz="0.0" izz="0.0"/>
+    </inertial>
+  </link>
+  <joint name="upper_arm_link-upperarm7_fixed_joint" type="fixed">
+    <parent link="upper_arm_link"/>
+    <child link="upperarm7"/>
+  </joint>
+  <link name="upperarm7">
+    <visual>
+      <geometry>
+        <mesh filename="visual/upperarm7.dae"/>
+      </geometry>
+      <material name="BlackMat"/>
+    </visual>
+    <inertial>
+      <mass value="0.0"/>
+      <origin rpy="0 0 0" xyz="0.0 0.0 0.0"/>
+      <inertia ixx="0.0" ixy="0.0" ixz="0.0" iyy="0.0" iyz="0.0" izz="0.0"/>
+    </inertial>
+  </link>
+  <joint name="upper_arm_link-upperarm8_fixed_joint" type="fixed">
+    <parent link="upper_arm_link"/>
+    <child link="upperarm8"/>
+  </joint>
+  <link name="upperarm8">
+    <visual>
+      <geometry>
+        <mesh filename="visual/upperarm8.dae"/>
+      </geometry>
+      <material name="LinkGrey"/>
+    </visual>
+    <inertial>
+      <mass value="0.0"/>
+      <origin rpy="0 0 0" xyz="0.0 0.0 0.0"/>
+      <inertia ixx="0.0" ixy="0.0" ixz="0.0" iyy="0.0" iyz="0.0" izz="0.0"/>
     </inertial>
   </link>
   <joint name="elbow_joint" type="revolute">
@@ -107,9 +278,9 @@
   <link name="forearm_link">
     <visual>
       <geometry>
-        <mesh filename="visual/forearm.dae"/>
+        <mesh filename="visual/forearm1.dae"/>
       </geometry>
-      <material name="DarkGrey"/>
+      <material name="JointGrey"/>
     </visual>
     <collision>
       <geometry>
@@ -120,6 +291,108 @@
       <mass value="3.87"/>
       <origin rpy="0 0 0" xyz="0.0 0.0 0.2855"/>
       <inertia ixx="0.11059036576383598" ixy="0.0" ixz="0.0" iyy="0.11059036576383598" iyz="0.0" izz="0.010884375"/>
+    </inertial>
+  </link>
+  <joint name="forearm_link-forearm2_fixed_joint" type="fixed">
+    <parent link="forearm_link"/>
+    <child link="forearm2"/>
+  </joint>
+  <link name="forearm2">
+    <visual>
+      <geometry>
+        <mesh filename="visual/forearm2.dae"/>
+      </geometry>
+      <material name="BlackMat"/>
+    </visual>
+    <inertial>
+      <mass value="0.0"/>
+      <origin rpy="0 0 0" xyz="0.0 0.0 0.0"/>
+      <inertia ixx="0.0" ixy="0.0" ixz="0.0" iyy="0.0" iyz="0.0" izz="0.0"/>
+    </inertial>
+  </link>
+  <joint name="forearm_link-forearm3_fixed_joint" type="fixed">
+    <parent link="forearm_link"/>
+    <child link="forearm3"/>
+  </joint>
+  <link name="forearm3">
+    <visual>
+      <geometry>
+        <mesh filename="visual/forearm3.dae"/>
+      </geometry>
+      <material name="URBlue"/>
+    </visual>
+    <inertial>
+      <mass value="0.0"/>
+      <origin rpy="0 0 0" xyz="0.0 0.0 0.0"/>
+      <inertia ixx="0.0" ixy="0.0" ixz="0.0" iyy="0.0" iyz="0.0" izz="0.0"/>
+    </inertial>
+  </link>
+  <joint name="forearm_link-forearm4_fixed_joint" type="fixed">
+    <parent link="forearm_link"/>
+    <child link="forearm4"/>
+  </joint>
+  <link name="forearm4">
+    <visual>
+      <geometry>
+        <mesh filename="visual/forearm4.dae"/>
+      </geometry>
+      <material name="JointGrey"/>
+    </visual>
+    <inertial>
+      <mass value="0.0"/>
+      <origin rpy="0 0 0" xyz="0.0 0.0 0.0"/>
+      <inertia ixx="0.0" ixy="0.0" ixz="0.0" iyy="0.0" iyz="0.0" izz="0.0"/>
+    </inertial>
+  </link>
+  <joint name="forearm_link-forearm5_fixed_joint" type="fixed">
+    <parent link="forearm_link"/>
+    <child link="forearm5"/>
+  </joint>
+  <link name="forearm5">
+    <visual>
+      <geometry>
+        <mesh filename="visual/forearm5.dae"/>
+      </geometry>
+      <material name="BlackMat"/>
+    </visual>
+    <inertial>
+      <mass value="0.0"/>
+      <origin rpy="0 0 0" xyz="0.0 0.0 0.0"/>
+      <inertia ixx="0.0" ixy="0.0" ixz="0.0" iyy="0.0" iyz="0.0" izz="0.0"/>
+    </inertial>
+  </link>
+  <joint name="forearm_link-forearm6_fixed_joint" type="fixed">
+    <parent link="forearm_link"/>
+    <child link="forearm6"/>
+  </joint>
+  <link name="forearm6">
+    <visual>
+      <geometry>
+        <mesh filename="visual/forearm6.dae"/>
+      </geometry>
+      <material name="BlackMat"/>
+    </visual>
+    <inertial>
+      <mass value="0.0"/>
+      <origin rpy="0 0 0" xyz="0.0 0.0 0.0"/>
+      <inertia ixx="0.0" ixy="0.0" ixz="0.0" iyy="0.0" iyz="0.0" izz="0.0"/>
+    </inertial>
+  </link>
+  <joint name="forearm_link-forearm7_fixed_joint" type="fixed">
+    <parent link="forearm_link"/>
+    <child link="forearm7"/>
+  </joint>
+  <link name="forearm7">
+    <visual>
+      <geometry>
+        <mesh filename="visual/forearm7.dae"/>
+      </geometry>
+      <material name="LinkGrey"/>
+    </visual>
+    <inertial>
+      <mass value="0.0"/>
+      <origin rpy="0 0 0" xyz="0.0 0.0 0.0"/>
+      <inertia ixx="0.0" ixy="0.0" ixz="0.0" iyy="0.0" iyz="0.0" izz="0.0"/>
     </inertial>
   </link>
   <joint name="wrist_1_joint" type="revolute">
@@ -133,9 +406,9 @@
   <link name="wrist_1_link">
     <visual>
       <geometry>
-        <mesh filename="visual/wrist1.dae"/>
+        <mesh filename="visual/wrist1_1.dae"/>
       </geometry>
-      <material name="LightGrey"/>
+      <material name="URBlue"/>
     </visual>
     <collision>
       <geometry>
@@ -146,6 +419,40 @@
       <mass value="1.96"/>
       <origin rpy="0 0 0" xyz="0.0 0.135 0.0"/>
       <inertia ixx="0.005108247956699999" ixy="0.0" ixz="0.0" iyy="0.005108247956699999" iyz="0.0" izz="0.005512499999999999"/>
+    </inertial>
+  </link>
+  <joint name="wrist_1_link-wrist_1_2_fixed_joint" type="fixed">
+    <parent link="wrist_1_link"/>
+    <child link="wrist_1_2"/>
+  </joint>
+  <link name="wrist_1_2">
+    <visual>
+      <geometry>
+        <mesh filename="visual/wrist1_2.dae"/>
+      </geometry>
+      <material name="BlackMat"/>
+    </visual>
+    <inertial>
+      <mass value="0.0"/>
+      <origin rpy="0 0 0" xyz="0.0 0.0 0"/>
+      <inertia ixx="0.0" ixy="0.0" ixz="0.0" iyy="0.0" iyz="0.0" izz="0.0"/>
+    </inertial>
+  </link>
+  <joint name="wrist_1_link-wrist_1_3_fixed_joint" type="fixed">
+    <parent link="wrist_1_link"/>
+    <child link="wrist_1_3"/>
+  </joint>
+  <link name="wrist_1_3">
+    <visual>
+      <geometry>
+        <mesh filename="visual/wrist1_3.dae"/>
+      </geometry>
+      <material name="JointGrey"/>
+    </visual>
+    <inertial>
+      <mass value="0.0"/>
+      <origin rpy="0 0 0" xyz="0.0 0.0 0"/>
+      <inertia ixx="0.0" ixy="0.0" ixz="0.0" iyy="0.0" iyz="0.0" izz="0.0"/>
     </inertial>
   </link>
   <joint name="wrist_2_joint" type="revolute">
@@ -159,9 +466,9 @@
   <link name="wrist_2_link">
     <visual>
       <geometry>
-        <mesh filename="visual/wrist2.dae"/>
+        <mesh filename="visual/wrist2_1.dae"/>
       </geometry>
-      <material name="DarkGrey"/>
+      <material name="URBlue"/>
     </visual>
     <collision>
       <geometry>
@@ -172,6 +479,40 @@
       <mass value="1.96"/>
       <origin rpy="0 0 0" xyz="0.0 0.0 0.12"/>
       <inertia ixx="0.005108247956699999" ixy="0.0" ixz="0.0" iyy="0.005108247956699999" iyz="0.0" izz="0.005512499999999999"/>
+    </inertial>
+  </link>
+  <joint name="wrist_2_link-wrist_2_2_fixed_joint" type="fixed">
+    <parent link="wrist_2_link"/>
+    <child link="wrist_2_2"/>
+  </joint>
+  <link name="wrist_2_2">
+    <visual>
+      <geometry>
+        <mesh filename="visual/wrist2_2.dae"/>
+      </geometry>
+      <material name="BlackMat"/>
+    </visual>
+    <inertial>
+      <mass value="0.0"/>
+      <origin rpy="0 0 0" xyz="0.0 0.0 0"/>
+      <inertia ixx="0.0" ixy="0.0" ixz="0.0" iyy="0.0" iyz="0.0" izz="0.0"/>
+    </inertial>
+  </link>
+  <joint name="wrist_2_link-wrist_2_3_fixed_joint" type="fixed">
+    <parent link="wrist_2_link"/>
+    <child link="wrist_2_3"/>
+  </joint>
+  <link name="wrist_2_3">
+    <visual>
+      <geometry>
+        <mesh filename="visual/wrist2_3.dae"/>
+      </geometry>
+      <material name="JointGrey"/>
+    </visual>
+    <inertial>
+      <mass value="0.0"/>
+      <origin rpy="0 0 0" xyz="0.0 0.0 0"/>
+      <inertia ixx="0.0" ixy="0.0" ixz="0.0" iyy="0.0" iyz="0.0" izz="0.0"/>
     </inertial>
   </link>
   <joint name="wrist_3_joint" type="revolute">
@@ -187,7 +528,7 @@
       <geometry>
         <mesh filename="visual/wrist3.dae"/>
       </geometry>
-      <material name="LightGrey"/>
+      <material name="LinkGrey"/>
     </visual>
     <collision>
       <geometry>
@@ -197,7 +538,7 @@
     <inertial>
       <mass value="0.202"/>
       <origin rpy="1.5707963267948966 0 0" xyz="0.0 0.092 0.0"/>
-      <inertia ixx="0.00014434577559500002" ixy="0.0" ixz="0.0" iyy="0.00014434577559500002" iyz="0.0" izz="0.00020452500000000002"/>
+      <inertia ixx="0.04434577559500002" ixy="0.0" ixz="0.0" iyy="0.04434577559500002" iyz="0.0" izz="0.00020452500000000002"/>
     </inertial>
   </link>
 

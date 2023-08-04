@@ -24,7 +24,7 @@ class DeepSym(pl.LightningModule):
         self.loss_coeff = config["loss_coeff"]
 
     def _initialize_networks(self, config):
-        enc_layers = [config["state_dim"]] + \
+        enc_layers = [config["state_dim"]*config["n_objects"]] + \
                      [config["hidden_dim"]]*config["n_hidden_layers"] + \
                      [config["latent_dim"]]
         self.encoder = torch.nn.Sequential(
@@ -32,10 +32,12 @@ class DeepSym(pl.LightningModule):
             blocks.GumbelSigmoidLayer(hard=config["gumbel_hard"],
                                       T=config["gumbel_t"])
         )
-        dec_layers = [config["latent_dim"] + config["action_dim"]] + \
+        # action dim is fixed to 2 for now
+        dec_layers = [config["latent_dim"] + 2] + \
                      [config["hidden_dim"]]*(config["n_hidden_layers"]) + \
-                     [config["effect_dim"]]
+                     [config["effect_dim"]*config["n_objects"]]
         self.decoder = blocks.MLP(dec_layers, batch_norm=config["batch_norm"])
+        self.n_objects = config["n_objects"]
 
     def encode(self, x: torch.Tensor, eval_mode=False) -> torch.Tensor:
         """
@@ -82,7 +84,7 @@ class DeepSym(pl.LightningModule):
         z = torch.cat([h, a], dim=-1)
         return z
 
-    def decode(self, z: torch.Tensor) -> torch.Tensor:
+    def decode(self, z: torch.Tensor, pad_mask: torch.Tensor) -> torch.Tensor:
         """
         Given a code, return the effect.
 
@@ -97,9 +99,13 @@ class DeepSym(pl.LightningModule):
             The effect tensor.
         """
         e = self.decoder(z)
-        return e
+        e = e.reshape(z.shape[0], self.n_objects, -1)
+        pad_mask = pad_mask.reshape(z.shape[0], self.n_objects, 1)
+        # turn off computation for padded parts
+        e_masked = e * pad_mask
+        return e_masked
 
-    def forward(self, s: torch.Tensor, a: torch.Tensor, eval_mode=False):
+    def forward(self, s: torch.Tensor, a: torch.Tensor, pad_mask: torch.Tensor, eval_mode=False):
         """
         Given a sample, return the code and the effect.
 
@@ -109,6 +115,8 @@ class DeepSym(pl.LightningModule):
             The state tensor.
         a : torch.Tensor
             The action tensor.
+        pad_mask : torch.Tensor
+            The padding mask tensor.
         eval_mode : bool
             If True, the output will be rounded to 0 or 1.
 
@@ -120,28 +128,59 @@ class DeepSym(pl.LightningModule):
             The effect tensor.
         """
         z = self.concat(s, a, eval_mode)
-        e = self.decode(z)
+        e = self.decode(z, pad_mask)
         return z, e
 
+    def _preprocess_batch(self, batch):
+        s, a, e, pad_mask, _ = batch
+        n_batch = s.shape[0]
+        _, from_obj_idx = torch.where(a[:, :, 0] > 0.5)
+        _, to_obj_idx = torch.where(a[:, :, 4] > 0.5)
+        _, rest_idx = torch.where((a[:, :, 0] < 0.5) & (a[:, :, 4] < 0.5))
+        n_range = torch.arange(n_batch)
+        permutation = torch.cat([from_obj_idx, to_obj_idx, rest_idx])
+        inv_perm = torch.argsort(permutation)
+
+        state = [s[n_range, from_obj_idx].unsqueeze(1), s[n_range, to_obj_idx].unsqueeze(1)]
+        if e is not None:
+            effect = [e[n_range, from_obj_idx].unsqueeze(1), e[n_range, to_obj_idx].unsqueeze(1)]
+        else:
+            effect = None
+
+        if len(rest_idx) > 0:
+            n_rest_obj = len(rest_idx) // n_batch
+            state.append(s[n_range.repeat_interleave(n_rest_obj), rest_idx].reshape(n_batch, n_rest_obj, -1))
+            if e is not None:
+                effect.append(e[n_range.repeat_interleave(n_rest_obj), rest_idx].reshape(n_batch, n_rest_obj, -1))
+        state = torch.cat(state, dim=1).reshape(n_batch, -1)
+        if e is not None:
+            effect = torch.cat(effect, dim=1).reshape(n_batch, -1)
+        action = torch.stack([a[n_range, from_obj_idx, 2], a[n_range, to_obj_idx, 6]], dim=1)
+        return state, action, effect, pad_mask, inv_perm
+
+    def loss(self, batch):
+        s, a, e, pad_mask, _ = self._preprocess_batch(batch)
+        _, e_pred = self.forward(s, a, pad_mask)
+        e = e.reshape(e_pred.shape)
+        loss = torch.nn.functional.mse_loss(e_pred, e, reduction="none")
+        loss = (loss * pad_mask.unsqueeze(2)).sum(dim=[1, 2]).mean() * self.loss_coeff
+        return loss
+
     def training_step(self, batch, _):
-        s, a, e, _, _ = batch
-        _, e_pred = self.forward(s, a)
-        loss = torch.nn.functional.mse_loss(e_pred, e) * self.loss_coeff
+        loss = self.loss(batch)
         self.log("train_loss", loss, on_epoch=True, prog_bar=True)
         return loss
 
     def validation_step(self, batch, _):
-        s, a, e, _, _ = batch
-        _, e_pred = self.forward(s, a)
-        loss = torch.nn.functional.mse_loss(e_pred, e) * self.loss_coeff
+        loss = self.loss(batch)
         self.log("val_loss", loss, on_epoch=True, prog_bar=True)
         return loss
 
     def test_step(self, batch, _):
-        s, a, e, _, _ = batch
-        _, e_pred = self.forward(s, a)
-        loss = torch.nn.functional.mse_loss(e_pred, e) * self.loss_coeff
-        return loss
+        s, a, e, pad_mask, _ = self._preprocess_batch(batch)
+        _, e_pred = self.forward(s, a, pad_mask)
+        e = e.reshape(e_pred.shape)
+        return (e - e_pred).abs()
 
     def predict_step(self, batch, _):
         s, a, _, _, sn = batch
@@ -239,28 +278,29 @@ class AttentiveDeepSym(DeepSym):
         e = self.decode(z_att, pad_mask)
         return z, attn_weights, e
 
+    def loss(self, e_pred, e, pad_mask):
+        loss = torch.nn.functional.mse_loss(e_pred, e, reduction="none")
+        loss = (loss * pad_mask.unsqueeze(2)).sum(dim=[1, 2]).mean() * self.loss_coeff
+        return loss
+
     def training_step(self, batch, _):
         s, a, e, pad_mask, _ = batch
         _, _, e_pred = self.forward(s, a, pad_mask)
-        loss = torch.nn.functional.mse_loss(e_pred, e, reduction="none")
-        loss = (loss * pad_mask.unsqueeze(2)).sum(dim=[1, 2]).mean() * self.loss_coeff
+        loss = self.loss(e_pred, e, pad_mask)
         self.log("train_loss", loss, on_epoch=True, prog_bar=True)
         return loss
 
     def validation_step(self, batch, _):
         s, a, e, pad_mask, _ = batch
         _, _, e_pred = self.forward(s, a, pad_mask)
-        loss = torch.nn.functional.mse_loss(e_pred, e, reduction="none")
-        loss = (loss * pad_mask.unsqueeze(2)).sum(dim=[1, 2]).mean() * self.loss_coeff
+        loss = self.loss(e_pred, e, pad_mask)
         self.log("val_loss", loss, on_epoch=True, prog_bar=True)
         return loss
 
     def test_step(self, batch, _):
         s, a, e, pad_mask, _ = batch
         _, _, e_pred = self.forward(s, a, pad_mask)
-        loss = torch.nn.functional.mse_loss(e_pred, e, reduction="none")
-        loss = (loss * pad_mask.unsqueeze(2)).sum(dim=[1, 2]).mean() * self.loss_coeff
-        return loss
+        return (e - e_pred).abs()
 
     def predict_step(self, batch, _):
         s, a, _, pad_mask, sn = batch
@@ -275,7 +315,7 @@ class AttentiveDeepSym(DeepSym):
         self.log_dict(norms)
 
 
-def load_ckpt_from_wandb(name, tag="best"):
+def load_ckpt_from_wandb(name, model_type=AttentiveDeepSym, tag="best"):
     save_dir = os.path.join("logs", name)
     model_path = os.path.join(save_dir, "model.ckpt")
     if not os.path.exists(model_path):
@@ -284,11 +324,11 @@ def load_ckpt_from_wandb(name, tag="best"):
                                       artifact_type="model",
                                       save_dir=save_dir,
                                       use_artifact=True)
-    model = AttentiveDeepSym.load_from_checkpoint(model_path)
+    model = model_type.load_from_checkpoint(model_path)
     return model, model_path
 
 
-def load_ckpt(name, tag="best"):
+def load_ckpt(name, model_type=AttentiveDeepSym, tag="best"):
     save_dir = os.path.join("logs", name)
     if os.path.exists(save_dir):
         ckpts = filter(lambda x: x.endswith(".ckpt"), os.listdir(save_dir))
@@ -299,7 +339,38 @@ def load_ckpt(name, tag="best"):
         else:
             ckpt = "last.ckpt"
         ckpt_path = os.path.join(save_dir, ckpt)
-        model = AttentiveDeepSym.load_from_checkpoint(ckpt_path)
+        model = model_type.load_from_checkpoint(ckpt_path)
     else:
-        model, ckpt_path = load_ckpt_from_wandb(name, tag)
+        model, ckpt_path = load_ckpt_from_wandb(name, model_type, tag)
     return model, ckpt_path
+
+
+class MultiDeepSym(AttentiveDeepSym):
+    def _initialize_networks(self, config):
+        enc_layers = [config["state_dim"]] + \
+                        [config["hidden_dim"]]*config["n_hidden_layers"] + \
+                        [config["latent_dim"]]
+        self.encoder = torch.nn.Sequential(
+            blocks.MLP(enc_layers, batch_norm=config["batch_norm"]),
+            blocks.GumbelSigmoidLayer(hard=config["gumbel_hard"],
+                                      T=config["gumbel_t"])
+        )
+
+        self.projector = torch.nn.Linear(config["latent_dim"]+config["action_dim"], config["hidden_dim"])
+        tr_enc_layer = torch.nn.TransformerEncoderLayer(d_model=config["hidden_dim"], nhead=config["n_attention_heads"],
+                                                        batch_first=True)
+        # fix num_layers to 4 for now
+        self.attention = torch.nn.TransformerEncoder(tr_enc_layer, num_layers=4)
+        dec_layers = [config["hidden_dim"]*(config["n_hidden_layers"]-1)] + [config["effect_dim"]]
+        self.decoder = blocks.MLP(dec_layers, batch_norm=config["batch_norm"])
+
+    def aggregate(self, z: torch.Tensor, pad_mask: torch.Tensor) -> torch.Tensor:
+        z_proj = self.projector(z)
+        z_att = self.attention(z_proj, src_key_padding_mask=~pad_mask.bool())
+        return z_att
+
+    def forward(self, s: torch.Tensor, a: torch.Tensor, pad_mask: torch.Tensor, eval_mode=False):
+        z = self.concat(s, a, eval_mode)
+        z_att = self.aggregate(z, pad_mask)
+        e = self.decode(z_att, pad_mask)
+        return z, z_att, e

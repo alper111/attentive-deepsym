@@ -24,7 +24,7 @@ class GenericEnv:
         self._p.loadURDF("plane.urdf")
 
         self.env_dict = utils.create_tabletop(self._p)
-        self.agent = manipulators.Manipulator(p=self._p, path="ur10e/ur10e.urdf", position=[0., 0., 0.4], ik_idx=10)
+        self.agent = manipulators.Manipulator(p=self._p, path="ur10e/ur10e.urdf", position=[0., 0., 0.4], ik_idx=30)
         base_constraint = self._p.createConstraint(parentBodyUniqueId=self.env_dict["base"], parentLinkIndex=0,
                                                    childBodyUniqueId=self.agent.id, childLinkIndex=-1,
                                                    jointType=self._p.JOINT_FIXED, jointAxis=(0, 0, 0),
@@ -33,7 +33,7 @@ class GenericEnv:
                                                    childFrameOrientation=(0, 0, 0, 1))
         self._p.changeConstraint(base_constraint, maxForce=10000)
         # force grippers to act in sync
-        mimic_constraint = self._p.createConstraint(self.agent.id, 8, self.agent.id, 9,
+        mimic_constraint = self._p.createConstraint(self.agent.id, 28, self.agent.id, 29,
                                                     jointType=self._p.JOINT_GEAR,
                                                     jointAxis=[1, 0, 0],
                                                     parentFramePosition=[0, 0, 0],

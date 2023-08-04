@@ -6,7 +6,7 @@ import yaml
 import lightning.pytorch as pl
 from lightning.pytorch.loggers import WandbLogger
 
-from models import AttentiveDeepSym, load_ckpt
+from models import DeepSym, AttentiveDeepSym, MultiDeepSym, load_ckpt
 from dataset import StateActionEffectDM
 
 parser = argparse.ArgumentParser("Train DeepSym.")
@@ -26,9 +26,23 @@ trainer = pl.Trainer(max_epochs=config["epoch"], gradient_clip_val=10.0,
 
 ckpt_path = None
 if config["resume"]:
-    model, ckpt_path = load_ckpt(config["name"], tag="latest")
+    model_dict = {
+        "attentive": AttentiveDeepSym,
+        "multideepsym": MultiDeepSym,
+        "deepsym": DeepSym
+    }
+    model, ckpt_path = load_ckpt(config["name"], model_type=model_dict[config["model"]], tag="latest")
 else:
-    model = AttentiveDeepSym(config)
+    if "model" not in config:
+        model = AttentiveDeepSym(config)
+    elif config["model"] == "attentive":
+        model = AttentiveDeepSym(config)
+    elif config["model"] == "multideepsym":
+        model = MultiDeepSym(config)
+    elif config["model"] == "deepsym":
+        model = DeepSym(config)
+    else:
+        raise ValueError("Invalid model name.")
 
 dm = StateActionEffectDM(config["dataset_name"], batch_size=config["batch_size"],
                          obj_relative=config["obj_relative"] if "obj_relative" in config else False)

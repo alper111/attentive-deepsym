@@ -6,6 +6,7 @@ import numpy as np
 import torch
 
 import utils
+from models import DeepSym
 
 
 class Tree:
@@ -260,8 +261,11 @@ class MCTSNode:
         while (i < iter_limit) and (time_elapsed < time_limit):
             v_arr = self._tree_policy(n=n_proc)
             v_arr = [(v, default_depth_limit) for v in v_arr]
-            with mp.get_context('spawn').Pool(processes=n_proc) as pool:
-                rewards = pool.starmap(self._default_policy_wrapper, v_arr)
+            if n_proc == 1:
+                rewards = [v_arr[0][0]._default_policy(default_depth_limit)]
+            else:
+                with mp.get_context('spawn').Pool(processes=n_proc) as pool:
+                    rewards = pool.starmap(self._default_policy_wrapper, v_arr)
 
             for (v, _), r in zip(v_arr, rewards):
                 v._backup(r)
@@ -269,7 +273,7 @@ class MCTSNode:
             i += 1
             end = time.time()
             time_elapsed = end - start
-            if i > 1:
+            if i % 100 == 0:
                 node_count, depth = self._tree_stats()
                 print(f"Tree depth={depth}, node count={node_count}, "
                       f"node/sec={(node_count-start_node_count)/time_elapsed:.2f}, "
@@ -600,30 +604,44 @@ class SymbolicState(MCTSState):
 
 
 class SubsymbolicState(MCTSState):
-    threshold = 0.025
-    available_actions = []
-    n_obj = 5
-    for i in range(n_obj):
-        for iy in range(-1, 2):
-            for j in range(n_obj):
-                for jy in range(-1, 2):
-                    available_actions.append(f"{i},0,{iy},{j},0,{jy}")
+    threshold = 0.01
+    # available_actions = []
+    # n_obj = 4
+    # for i in range(n_obj):
+    #     for iy in range(-1, 2):
+    #         for j in range(n_obj):
+    #             if i != j:
+    #                 for jy in range(-1, 2):
+    #                     available_actions.append(f"{i},0,{iy},{j},0,{jy}")
 
     def __init__(self, state, goal):
         self.state = state
         self.goal = goal
+        n_obj = state.shape[0]
+        available_actions = []
+        for i in range(n_obj):
+            for j in range(n_obj):
+                if i != j:
+                    for jy in range(-1, 2):
+                        if state[i, -1] < 0.5:
+                            for iy in range(-1, 2):
+                                available_actions.append(f"{i},0,{iy},{j},0,{jy}")
+                        else:
+                            available_actions.append(f"{i},0,0,{j},0,{jy}")
+        self.available_actions = available_actions
 
     def reward(self):
-        # diff = self.goal_diff()
-        # reward = min(SubsymbolicState.threshold / diff, 1)
-        return int(self.is_terminal())
+        diff = self.goal_diff()
+        reward = min(SubsymbolicState.threshold / diff, 1)
+        return reward
+        # return int(self.is_terminal())
 
     def goal_diff(self):
         diff = (self.state[:, :3] - self.goal[:, :3]).abs().mean(dim=0).sum()
         return diff
 
     def get_available_actions(self):
-        return SubsymbolicState.available_actions
+        return self.available_actions
 
     def is_terminal(self):
         diff = self.goal_diff()
@@ -638,10 +656,11 @@ class SubsymbolicState(MCTSState):
 
 
 class SubsymbolicForwardModel(MCTSForward):
-    def __init__(self, model):
+    def __init__(self, model, obj_relative=False):
         self.model = model
+        self.obj_relative = obj_relative
 
-    def __call__(self, state, action):
+    def __call__(self, state, action, obj_relative=False):
         n_objs = state.state.shape[0]
         mask = torch.ones(1, n_objs)
         action = torch.tensor([int(a_i) for a_i in action.split(",")])
@@ -649,9 +668,19 @@ class SubsymbolicForwardModel(MCTSForward):
         action_placeholder[action[0], :4] = torch.tensor([1, action[1], action[2], 1], dtype=torch.float)
         action_placeholder[action[3], 4:] = torch.tensor([1, action[4], action[5], 1], dtype=torch.float)
         with torch.no_grad():
-            _, _, e = self.model.forward(s=state.state.unsqueeze(0),
-                                         a=action_placeholder.unsqueeze(0),
-                                         pad_mask=mask)
+            if self.obj_relative or obj_relative:
+                st = state.state.clone()
+                st[:, :3] = st[:, :3] - st[action[0], :3]
+            else:
+                st = state.state.clone()
+
+            if type(self.model) == DeepSym:
+                s, a, _, m, inv_perm = self.model._preprocess_batch((st.unsqueeze(0), action_placeholder.unsqueeze(0),
+                                                                     None, mask, None))
+                e = self.model.forward(s=s, a=a, pad_mask=m)[-1]
+                e = e[:, inv_perm, :]
+            else:
+                e = self.model.forward(s=st.unsqueeze(0), a=action_placeholder.unsqueeze(0), pad_mask=mask)[-1]
             delta_pos = state.state[action[3]] - state.state[action[0]]
             dx, dy = delta_pos[0], delta_pos[1]
             dx += (-action[1] * 0.075) + (action[4] * 0.075)
