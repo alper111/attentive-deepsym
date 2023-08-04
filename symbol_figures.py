@@ -14,8 +14,9 @@ import utils
 def compute_symbols(model, loader):
     symbols = {}
     for batch in loader:
-        state, _, _, _, _ = batch
+        state, _, _, mask, _ = batch
         if type(model) == DeepSym:
+            # we do not consider masking for 2-4 for deepsym
             st, _, _, _, _ = model._preprocess_batch(batch)
             z = model.encode(st, eval_mode=True)
             z_str = utils.binary_tensor_to_str(z)
@@ -25,9 +26,11 @@ def compute_symbols(model, loader):
                 symbols[z_j].append(s_j)
         else:
             z = model.encode(state, eval_mode=True)
-            for z_i, s_i in zip(z, state):
+            for z_i, s_i, m_i in zip(z, state, mask):
                 z_str = utils.binary_tensor_to_str(z_i)
-                for z_j, s_j in zip(z_str, s_i):
+                for z_j, s_j, m_j in zip(z_str, s_i, m_i):
+                    if m_j < 0.5:
+                        continue
                     if z_j not in symbols:
                         symbols[z_j] = []
                     symbols[z_j].append(s_j)
@@ -41,12 +44,14 @@ def compute_relations(model, loader):
     for batch in loader:
         state, _, _, mask, _ = batch
         r = model.attn_weights(state, mask, eval_mode=True)
-        for r_i, s_i in zip(r, state):
+        for r_i, s_i, m_i in zip(r, state, mask):
             for j, r_ij in enumerate(r_i):
                 if j not in relations:
                     relations[j] = {0: {"q": [], "k": []}, 1: {"q": [], "k": []}}
-                for o1, r_ijk in enumerate(r_ij):
-                    for o2, r_ijkl in enumerate(r_ijk):
+                for (o1, r_ijk), m_j1 in zip(enumerate(r_ij), m_i):
+                    for (o2, r_ijkl), m_j2 in zip(enumerate(r_ijk), m_i):
+                        if m_j1 < 0.5 or m_j2 < 0.5:
+                            continue
                         relations[j][r_ijkl.item()]["q"].append(s_i[o1])
                         relations[j][r_ijkl.item()]["k"].append(s_i[o2])
     for k, v in relations.items():
@@ -57,11 +62,11 @@ def compute_relations(model, loader):
 
 
 def plot_symbols(sym_dict, sym_per_row, out_path):
-    symbols = {k: v for k, v in sym_dict.items() if len(v) > 100}
+    symbols = {k: v for k, v in sym_dict.items() if len(v) > 1}
     unique_symbols = list(symbols.keys())
     n_rows = len(unique_symbols) // sym_per_row + 1
     n_rows -= 1 if len(unique_symbols) % sym_per_row == 0 else 0
-    fig, ax = plt.subplots(n_rows, sym_per_row, figsize=(sym_per_row * 4, n_rows * 4))
+    fig, ax = plt.subplots(n_rows, sym_per_row, figsize=(sym_per_row * 4, n_rows * 3))
     cmap = plt.get_cmap("coolwarm")
     matplotlib.rc('font', size=16)
     for i, z_i in enumerate(unique_symbols):
@@ -107,10 +112,10 @@ def plot_relations(rel_dict, rel_per_row, out_path):
     unique_relations = list(rel_dict.keys())
     n_rows = len(unique_relations) // rel_per_row + 1
     n_rows -= 1 if len(unique_relations) % rel_per_row == 0 else 0
-    fig, ax = plt.subplots(n_rows, rel_per_row, figsize=(rel_per_row * 4, n_rows * 4))
+    fig, ax = plt.subplots(n_rows, rel_per_row, figsize=(rel_per_row * 4, n_rows * 3))
     cmap = plt.get_cmap("coolwarm")
     matplotlib.rc('font', size=16)
-    for i, r_i in enumerate(unique_relations):
+    for i, r_i in tqdm(enumerate(unique_relations)):
         row_num = i // rel_per_row
         col_num = i % rel_per_row
         curr_ax = ax[row_num, col_num] if n_rows > 1 else ax[col_num]
@@ -148,8 +153,8 @@ if __name__ == "__main__":
     model, _ = load_ckpt(run_id, model_type=model_type, tag="best")
     model.freeze()
 
-    trainset = StateActionEffectDataset("blocks2_v2", split="train", obj_relative=True)
-    loader = torch.utils.data.DataLoader(trainset, batch_size=1024)
+    trainset = StateActionEffectDataset("blocks234", split="train", obj_relative=True)
+    loader = torch.utils.data.DataLoader(trainset, batch_size=256)
 
     out_path = os.path.join("out", run_id)
     sym_path = os.path.join(out_path, "symbols.pt")
