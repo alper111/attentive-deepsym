@@ -1,6 +1,5 @@
 import argparse
 import multiprocessing as mp
-import itertools
 import pickle
 
 
@@ -21,6 +20,7 @@ class Node:
         self.relation_bindings = relation_bindings
         self.counts = counts
         self.gating = gating
+        self.named_effects = {}
 
     def __repr__(self) -> str:
         return f"Node({self.object_bindings}, {self.action_bindings}, {self.relation_bindings}, {self.gating.sum()})"
@@ -176,6 +176,9 @@ def is_satisfied(sample, object_bindings, action_bindings, relation_bindings):
     obj_act_binded = True
     all_names = list(set(list(object_bindings.keys()) + list(action_bindings.keys())))
     filtered_possible_indices = {}
+    if len(all_names) == 0:
+        obj_act_binded = False
+
     for name in all_names:
         if name in obj_possible_indices:
             obj_indices = obj_possible_indices[name]
@@ -247,41 +250,9 @@ def check_rule(object_bindings, action_bindings, relation_bindings,
     right_counts = {}
     left_gating = np.zeros(len(gating), dtype=bool)
     right_gating = np.zeros(len(gating), dtype=bool)
-    effect_bindings = []
-    total_binded = 0
     for i, sample in enumerate(loader):
         if gating[i]:
             satisfied, bindings = is_satisfied(sample, object_bindings, action_bindings, relation_bindings)
-            flattened_indices = flatten_tuple(effect_indices[i])
-            unique_indices = list(set(flattened_indices))
-            current_candidates = {}
-            for binding in bindings:
-                variables = list(binding.keys())
-                if sorted(tuple(v.item() for v in binding.values())) != sorted(tuple(unique_indices)):
-                    continue
-
-                for perm in itertools.permutations(unique_indices):
-                    current_mapping = {p: v for p, v in zip(perm, variables)}
-                    computed_indices = tuple([binding[current_mapping[idx]].item() for idx in flattened_indices])
-                    similarity = np.sum(np.array(computed_indices) == np.array(flattened_indices)) / len(flattened_indices)
-                    if (tuple(perm), tuple(variables)) not in current_candidates:
-                        current_candidates[(tuple(perm), tuple(variables))] = []
-                    current_candidates[(tuple(perm), tuple(variables))].append(similarity)
-            # select the best binding
-            if len(current_candidates) > 0:
-                best_binding = None
-                best_avg_sim = -1
-                for binding in current_candidates:
-                    avg_sim = np.mean(current_candidates[binding])
-                    if avg_sim > best_avg_sim:
-                        best_binding = binding
-                        best_avg_sim = avg_sim
-                best_mapping = {p: v for p, v in zip(best_binding[0], best_binding[1])}
-                binding = transform_tuple(effect_indices[i], best_mapping)
-                effect_bindings.append(binding)
-                total_binded += 1
-            else:
-                effect_bindings.append(effect_indices[i])
 
             if satisfied:
                 if effects[i] not in left_counts:
@@ -293,7 +264,40 @@ def check_rule(object_bindings, action_bindings, relation_bindings,
                     right_counts[effects[i]] = 0
                 right_counts[effects[i]] += 1
                 right_gating[i] = True
-    return left_counts, left_gating, right_counts, right_gating, total_binded
+    return left_counts, left_gating, right_counts, right_gating
+
+
+def count_named_effects(node, loader, effect_indices):
+    named_effects = {}
+    for i, sample in enumerate(loader):
+        satisfied, bindings = is_satisfied(sample, node.object_bindings,
+                                           node.action_bindings, node.relation_bindings)
+        if satisfied:
+            for binding in bindings:
+                reverse_mapping = {int(v): k for k, v in binding.items()}
+                nm_effect = transform_tuple(effect_indices[i], reverse_mapping)
+                if nm_effect not in named_effects:
+                    named_effects[nm_effect] = 0
+                named_effects[nm_effect] += 1
+    return named_effects
+
+
+def populate_named_effects(node, loader, effect_indices, n_procs=1):
+    proc_args = []
+    queue = [node]
+    while len(queue) > 0:
+        node = queue.pop(0)
+        proc_args.append((node, loader, effect_indices))
+        if node.left is not None:
+            queue.append(node.left)
+        if node.right is not None:
+            queue.append(node.right)
+
+    with mp.get_context("spawn").Pool(n_procs) as pool:
+        results = pool.starmap(count_named_effects, proc_args)
+
+    for (node, _, _), result in zip(proc_args, results):
+        node.named_effects = result
 
 
 def calculate_entropy(counts):
@@ -415,8 +419,7 @@ def calculate_best_split(node, loader, effects, effect_indices, unique_object_va
     with mp.get_context("spawn").Pool(num_procs) as pool:
         results = pool.starmap(check_rule, proc_args)
 
-    best_binded = 0
-    for (left_counts, left_gating, right_counts, right_gating, total_binded), (args), (r_args) in zip(results, proc_args, right_args):
+    for (left_counts, left_gating, right_counts, right_gating), (args), (r_args) in zip(results, proc_args, right_args):
         left_entropy = calculate_entropy(left_counts)
         right_entropy = calculate_entropy(right_counts)
         impurity = (left_entropy * np.sum(left_gating) + right_entropy * np.sum(right_gating)) / node.gating.sum()
@@ -436,8 +439,6 @@ def calculate_best_split(node, loader, effects, effect_indices, unique_object_va
                               counts=right_counts,
                               gating=right_gating)
             best_impurity = impurity
-            best_binded = total_binded
-    print(best_binded)
     return best_impurity, left_node, right_node
 
 
@@ -570,7 +571,10 @@ def transform_tuple(nested_tuple, mapping):
         if isinstance(item, tuple):
             transformed.append(transform_tuple(item, mapping))
         else:
-            transformed.append(mapping[item])
+            if item in mapping:
+                transformed.append(mapping[item])
+            else:
+                transformed.append("unk")
     return tuple(transformed)
 
 
