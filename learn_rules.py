@@ -1,7 +1,7 @@
 import argparse
 import multiprocessing as mp
 import pickle
-
+import os
 
 import torch
 import numpy as np
@@ -83,7 +83,7 @@ def create_effect_classes(loader, given_effect_to_class=None):
             effects.append(effect_to_class[key])
         else:
             effects.append(effect_to_class[key])
-        changed_indices.append((obj_indices, rel_indices))
+        changed_indices.append((obj_indices, *rel_indices))
 
     if given_effect_to_class is not None:
         return effects, changed_indices
@@ -245,14 +245,14 @@ def is_satisfied(sample, object_bindings, action_bindings, relation_bindings):
 
 
 def check_rule(object_bindings, action_bindings, relation_bindings,
-               loader, effects, effect_indices, gating):
+               loader, effects, gating):
     left_counts = {}
     right_counts = {}
     left_gating = np.zeros(len(gating), dtype=bool)
     right_gating = np.zeros(len(gating), dtype=bool)
     for i, sample in enumerate(loader):
         if gating[i]:
-            satisfied, bindings = is_satisfied(sample, object_bindings, action_bindings, relation_bindings)
+            satisfied, _ = is_satisfied(sample, object_bindings, action_bindings, relation_bindings)
 
             if satisfied:
                 if effects[i] not in left_counts:
@@ -267,7 +267,7 @@ def check_rule(object_bindings, action_bindings, relation_bindings,
     return left_counts, left_gating, right_counts, right_gating
 
 
-def count_named_effects(node, loader, effect_indices):
+def count_named_effects(node, loader, effect_indices, effect_class_values):
     named_effects = {}
     for i, sample in enumerate(loader):
         satisfied, bindings = is_satisfied(sample, node.object_bindings,
@@ -276,18 +276,33 @@ def count_named_effects(node, loader, effect_indices):
             for binding in bindings:
                 reverse_mapping = {int(v): k for k, v in binding.items()}
                 nm_effect = transform_tuple(effect_indices[i], reverse_mapping)
+                effect_with_value = []
+                current_effect_value = effect_class_values[i]
+                for r_i, field in enumerate(nm_effect):
+                    if (len(field) > 0) and (len(current_effect_value[r_i]) == len(field)):
+                        current_rel = []
+                        for n_i, name in enumerate(field):
+                            val = current_effect_value[r_i][n_i]
+                            if isinstance(name, str):
+                                current_rel.append((name,) + (val,))
+                            else:
+                                current_rel.append(name + val)
+                        effect_with_value.append(tuple(current_rel))
+                    elif (len(field) == 0) and (len(current_effect_value[r_i]) == 0):
+                        effect_with_value.append(())
+                nm_effect = tuple(effect_with_value)
                 if nm_effect not in named_effects:
                     named_effects[nm_effect] = 0
                 named_effects[nm_effect] += 1
     return named_effects
 
 
-def populate_named_effects(node, loader, effect_indices, n_procs=1):
+def populate_named_effects(node, loader, effect_indices, effect_class_values, n_procs=1):
     proc_args = []
     queue = [node]
     while len(queue) > 0:
         node = queue.pop(0)
-        proc_args.append((node, loader, effect_indices))
+        proc_args.append((node, loader, effect_indices, effect_class_values))
         if node.left is not None:
             queue.append(node.left)
         if node.right is not None:
@@ -296,7 +311,7 @@ def populate_named_effects(node, loader, effect_indices, n_procs=1):
     with mp.get_context("spawn").Pool(n_procs) as pool:
         results = pool.starmap(count_named_effects, proc_args)
 
-    for (node, _, _), result in zip(proc_args, results):
+    for (node, _, _, _), result in zip(proc_args, results):
         node.named_effects = result
 
 
@@ -306,7 +321,7 @@ def calculate_entropy(counts):
     return entropy
 
 
-def calculate_best_split(node, loader, effects, effect_indices, unique_object_values,
+def calculate_best_split(node, loader, effects, unique_object_values,
                          unique_action_values, min_samples_split, num_procs=1):
     """
     Calculate the best split for the given node.
@@ -354,7 +369,7 @@ def calculate_best_split(node, loader, effects, effect_indices, unique_object_va
             object_bindings = node.object_bindings.copy()
             object_bindings[act_var] = (obj_val, 0)
             proc_args.append((object_bindings, node.action_bindings, node.relation_bindings,
-                             loader, effects, effect_indices, node.gating))
+                              loader, effects, node.gating))
             right_object_bindings = node.object_bindings.copy()
             right_object_bindings[act_var] = (obj_val, 1)
             right_args.append((right_object_bindings, node.action_bindings, node.relation_bindings))
@@ -364,7 +379,7 @@ def calculate_best_split(node, loader, effects, effect_indices, unique_object_va
         object_bindings = node.object_bindings.copy()
         object_bindings[new_obj_name] = (obj_val, 0)
         proc_args.append((object_bindings, node.action_bindings, node.relation_bindings,
-                          loader, effects, effect_indices, node.gating))
+                          loader, effects, node.gating))
         right_object_bindings = node.object_bindings.copy()
         right_object_bindings[new_obj_name] = (obj_val, 1)
         right_args.append((right_object_bindings, node.action_bindings, node.relation_bindings))
@@ -380,7 +395,7 @@ def calculate_best_split(node, loader, effects, effect_indices, unique_object_va
             action_bindings = node.action_bindings.copy()
             action_bindings[obj_var] = (act_val, 0)
             proc_args.append((node.object_bindings, action_bindings, node.relation_bindings,
-                              loader, effects, effect_indices, node.gating))
+                              loader, effects, node.gating))
             right_action_bindings = node.action_bindings.copy()
             right_action_bindings[obj_var] = (act_val, 1)
             right_args.append((node.object_bindings, right_action_bindings, node.relation_bindings))
@@ -390,7 +405,7 @@ def calculate_best_split(node, loader, effects, effect_indices, unique_object_va
         action_bindings = node.action_bindings.copy()
         action_bindings[new_obj_name] = (act_val, 0)
         proc_args.append((node.object_bindings, action_bindings, node.relation_bindings,
-                          loader, effects, effect_indices, node.gating))
+                          loader, effects, node.gating))
         right_action_bindings = node.action_bindings.copy()
         right_action_bindings[new_obj_name] = (act_val, 1)
         right_args.append((node.object_bindings, right_action_bindings, node.relation_bindings))
@@ -411,7 +426,7 @@ def calculate_best_split(node, loader, effects, effect_indices, unique_object_va
                     relation_bindings = node.relation_bindings.copy()
                     relation_bindings[key] = (val, 0)
                     proc_args.append((node.object_bindings, node.action_bindings, relation_bindings,
-                                      loader, effects, effect_indices, node.gating))
+                                      loader, effects, node.gating))
                     right_relation_bindings = node.relation_bindings.copy()
                     right_relation_bindings[key] = (val, 1)
                     right_args.append((node.object_bindings, node.action_bindings, right_relation_bindings))
@@ -442,8 +457,9 @@ def calculate_best_split(node, loader, effects, effect_indices, unique_object_va
     return best_impurity, left_node, right_node
 
 
-def learn_tree(loader, effects, effect_indices, unique_object_values,
-               unique_action_values, min_samples_split=100, num_procs=1):
+def learn_tree(loader, effects, effect_indices, effect_class_values,
+               unique_object_values, unique_action_values, min_samples_split=100,
+               num_procs=1):
     """Learn a decision tree from the given dataset.
 
     Args:
@@ -472,9 +488,8 @@ def learn_tree(loader, effects, effect_indices, unique_object_values,
     while len(queue) > 0:
         node = queue.pop(0)
         num_nodes += 1
-        _, left_node, right_node = calculate_best_split(node, loader, effects, effect_indices,
-                                                        unique_object_values, unique_action_values,
-                                                        min_samples_split, num_procs)
+        _, left_node, right_node = calculate_best_split(node, loader, effects, unique_object_values,
+                                                        unique_action_values, min_samples_split, num_procs)
         if left_node is not None:
             print(f"Left node:\n"
                   f"  object bindings={left_node.object_bindings},\n"
@@ -505,6 +520,9 @@ def learn_tree(loader, effects, effect_indices, unique_object_values,
                   f"  counts={node.counts},\n"
                   f"  entropy={calculate_entropy(node.counts)},\n"
                   f"Num nodes: {num_nodes}")
+
+    # populate the named effects
+    populate_named_effects(root_node, loader, effect_indices, effect_class_values, num_procs)
 
     return root_node
 
@@ -621,8 +639,15 @@ if __name__ == "__main__":
 
     unique_object_values = trainset.tensors[0].int().flatten(0, 1).unique(dim=0)
     unique_action_values = trainset.tensors[2].int().flatten(0, 1).unique(dim=0)
+    train_effect_values = [train_class_to_effect[train_effects[i]] for i in range(len(train_effects))]
 
     root = learn_tree(trainloader, filtered_effects, train_changed_indices,
-                      unique_object_values, unique_action_values,
+                      train_effect_values, unique_object_values, unique_action_values,
                       min_samples_split=50, num_procs=args.p)
-    pickle.dump(root, open("tree.pkl", "wb"))
+
+    save_path = os.path.join("out", args.n)
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
+    pickle.dump(root, open(os.path.join(save_path, "tree.pkl"), "wb"))
+    torch.save(train_class_to_effect, os.path.join(save_path, "class_to_effect.pt"))
+    torch.save(selected_classes, os.path.join(save_path, "selected_classes.pt"))
