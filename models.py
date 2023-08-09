@@ -339,7 +339,7 @@ def load_ckpt(name, model_type=AttentiveDeepSym, tag="best"):
         else:
             ckpt = "last.ckpt"
         ckpt_path = os.path.join(save_dir, ckpt)
-        model = model_type.load_from_checkpoint(ckpt_path)
+        model = model_type.load_from_checkpoint(ckpt_path, map_location="cpu")
     else:
         model, ckpt_path = load_ckpt_from_wandb(name, model_type, tag)
     return model, ckpt_path
