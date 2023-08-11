@@ -2,6 +2,8 @@ import argparse
 import multiprocessing as mp
 import pickle
 import os
+from functools import reduce
+from copy import deepcopy
 
 import torch
 import numpy as np
@@ -145,31 +147,50 @@ def is_satisfied(sample, object_bindings, action_bindings, relation_bindings):
     obj_exists = True
     obj_possible_indices = {}
     for name in object_bindings:
-        val, direction = object_bindings[name]
-        if direction == 0:
-            indices = torch.where((o_i == val).all(dim=1))[0]
-        else:
-            indices = torch.where((o_i != val).any(dim=1))[0]
+        shared_possible_indices = []
+        for (val, direction) in object_bindings[name]:
+            # val, direction = object_bindings[name]
+            if direction == 0:
+                indices = torch.where((o_i == val).all(dim=1))[0]
+            else:
+                indices = torch.where((o_i != val).any(dim=1))[0]
 
-        if len(indices) > 0:
-            obj_possible_indices[name] = indices
+            if len(indices) > 0:
+                shared_possible_indices.append(indices)
+                # obj_possible_indices[name] = indices
+            else:
+                obj_exists = False
+                break
+        if obj_exists:
+            obj_possible_indices[name] = torch.tensor(
+                reduce(np.intersect1d, (x.numpy() for x in shared_possible_indices)),
+                dtype=torch.long)
         else:
-            obj_exists = False
             break
 
     # get possible action indices
     act_exists = True
     act_possible_indices = {}
     for name in action_bindings:
-        val, direction = action_bindings[name]
-        if direction == 0:
-            indices = torch.where((a == val).all(dim=1))[0]
+        shared_possible_indices = []
+        for (val, direction) in action_bindings[name]:
+            # val, direction = action_bindings[name]
+            if direction == 0:
+                indices = torch.where((a == val).all(dim=1))[0]
+            else:
+                indices = torch.where((a != val).any(dim=1))[0]
+
+            if len(indices) > 0:
+                shared_possible_indices.append(indices)
+                # act_possible_indices[name] = indices
+            else:
+                act_exists = False
+                break
+        if act_exists:
+            act_possible_indices[name] = torch.tensor(
+                reduce(np.intersect1d, (x.numpy() for x in shared_possible_indices)),
+                dtype=torch.long)
         else:
-            indices = torch.where((a != val).any(dim=1))[0]
-        if len(indices) > 0:
-            act_possible_indices[name] = indices
-        else:
-            act_exists = False
             break
 
     # constraints
@@ -361,53 +382,87 @@ def calculate_best_split(node, loader, effects, unique_object_values,
     # bind a variable in action list to a new object value
     for act_var in act_var_list:
         # continue if the variable already is bound to an object value
-        if act_var in node.object_bindings:
-            continue
+        # if act_var in node.object_bindings:
+        #     continue
 
         # bind the variable to each object value
         for obj_val in unique_object_values:
-            object_bindings = node.object_bindings.copy()
-            object_bindings[act_var] = (obj_val, 0)
+            object_bindings = deepcopy(node.object_bindings)
+            if act_var not in object_bindings:
+                object_bindings[act_var] = []
+            else:
+                is_bound_before = False
+                # check whether it has been bound to the same value
+                for val, _ in object_bindings[act_var]:
+                    if (obj_val == val).all():
+                        is_bound_before = True
+                        continue
+                if is_bound_before:
+                    continue
+            object_bindings[act_var].append((obj_val, 0))
+            # object_bindings[act_var] = (obj_val, 0)
             proc_args.append((object_bindings, node.action_bindings, node.relation_bindings,
                               loader, effects, node.gating))
-            right_object_bindings = node.object_bindings.copy()
-            right_object_bindings[act_var] = (obj_val, 1)
+            right_object_bindings = deepcopy(node.object_bindings)
+            if act_var not in right_object_bindings:
+                right_object_bindings[act_var] = []
+            right_object_bindings[act_var].append((obj_val, 1))
+            # right_object_bindings[act_var] = (obj_val, 1)
             right_args.append((right_object_bindings, node.action_bindings, node.relation_bindings))
 
     # bind a new variable to a new object value
     for obj_val in unique_object_values:
         object_bindings = node.object_bindings.copy()
-        object_bindings[new_obj_name] = (obj_val, 0)
+        object_bindings[new_obj_name] = [(obj_val, 0)]
+        # object_bindings[new_obj_name] = (obj_val, 0)
         proc_args.append((object_bindings, node.action_bindings, node.relation_bindings,
                           loader, effects, node.gating))
-        right_object_bindings = node.object_bindings.copy()
-        right_object_bindings[new_obj_name] = (obj_val, 1)
+        right_object_bindings = deepcopy(node.object_bindings)
+        right_object_bindings[new_obj_name] = [(obj_val, 1)]
+        # right_object_bindings[new_obj_name] = (obj_val, 1)
         right_args.append((right_object_bindings, node.action_bindings, node.relation_bindings))
 
     # bind a variable in object list to a new action value
     for obj_var in obj_var_list:
         # continue if the variable already is bound to an action value
-        if obj_var in node.action_bindings:
-            continue
+        # if obj_var in node.action_bindings:
+        #     continue
 
         # bind the variable to each action value
         for act_val in unique_action_values:
-            action_bindings = node.action_bindings.copy()
-            action_bindings[obj_var] = (act_val, 0)
+            action_bindings = deepcopy(node.action_bindings)
+            if obj_var not in action_bindings:
+                action_bindings[obj_var] = []
+            else:
+                is_bound_before = False
+                # check whether it has been bound to the same value
+                for val, _ in action_bindings[obj_var]:
+                    if (act_val == val).all():
+                        is_bound_before = True
+                        continue
+                if is_bound_before:
+                    continue
+            action_bindings[obj_var].append((act_val, 0))
+            # action_bindings[obj_var] = (act_val, 0)
             proc_args.append((node.object_bindings, action_bindings, node.relation_bindings,
                               loader, effects, node.gating))
-            right_action_bindings = node.action_bindings.copy()
-            right_action_bindings[obj_var] = (act_val, 1)
+            right_action_bindings = deepcopy(node.action_bindings)
+            if obj_var not in right_action_bindings:
+                right_action_bindings[obj_var] = []
+            right_action_bindings[obj_var].append((act_val, 1))
+            # right_action_bindings[obj_var] = (act_val, 1)
             right_args.append((node.object_bindings, right_action_bindings, node.relation_bindings))
 
     # bind a new variable to a new action value
     for act_val in unique_action_values:
-        action_bindings = node.action_bindings.copy()
-        action_bindings[new_obj_name] = (act_val, 0)
+        action_bindings = deepcopy(node.action_bindings)
+        action_bindings[new_obj_name] = [(act_val, 0)]
+        # action_bindings[new_obj_name] = (act_val, 0)
         proc_args.append((node.object_bindings, action_bindings, node.relation_bindings,
                           loader, effects, node.gating))
-        right_action_bindings = node.action_bindings.copy()
-        right_action_bindings[new_obj_name] = (act_val, 1)
+        right_action_bindings = deepcopy(node.action_bindings)
+        right_action_bindings[new_obj_name] = [(act_val, 1)]
+        # right_action_bindings[new_obj_name] = (act_val, 1)
         right_args.append((node.object_bindings, right_action_bindings, node.relation_bindings))
 
     # bind two variables in either object list or action list to a new relation value
@@ -423,11 +478,11 @@ def calculate_best_split(node, loader, effects, unique_object_values,
                         continue
 
                     # bind the relation to each value
-                    relation_bindings = node.relation_bindings.copy()
+                    relation_bindings = deepcopy(node.relation_bindings)
                     relation_bindings[key] = (val, 0)
                     proc_args.append((node.object_bindings, node.action_bindings, relation_bindings,
                                       loader, effects, node.gating))
-                    right_relation_bindings = node.relation_bindings.copy()
+                    right_relation_bindings = deepcopy(node.relation_bindings)
                     right_relation_bindings[key] = (val, 1)
                     right_args.append((node.object_bindings, node.action_bindings, right_relation_bindings))
 
@@ -442,15 +497,15 @@ def calculate_best_split(node, loader, effects, unique_object_values,
            (np.sum(left_gating) >= min_samples_split) and \
            (np.sum(right_gating) >= min_samples_split):
             left_node = Node(left=None, right=None,
-                             object_bindings=args[0].copy(),
-                             action_bindings=args[1].copy(),
-                             relation_bindings=args[2].copy(),
+                             object_bindings=deepcopy(args[0]),
+                             action_bindings=deepcopy(args[1]),
+                             relation_bindings=deepcopy(args[2]),
                              counts=left_counts,
                              gating=left_gating)
             right_node = Node(left=None, right=None,
-                              object_bindings=r_args[0].copy(),
-                              action_bindings=r_args[1].copy(),
-                              relation_bindings=r_args[2].copy(),
+                              object_bindings=deepcopy(r_args[0]),
+                              action_bindings=deepcopy(r_args[1]),
+                              relation_bindings=deepcopy(r_args[2]),
                               counts=right_counts,
                               gating=right_gating)
             best_impurity = impurity
@@ -622,8 +677,8 @@ if __name__ == "__main__":
 
     model, _ = load_ckpt(args.n, tag="best")
     trainer = pl.Trainer(devices=[0])
-    cnt_trainloader = torch.utils.data.DataLoader(dataset.StateActionEffectDataset("blocks2_v2", "train"), batch_size=1024)
-    cnt_valloader = torch.utils.data.DataLoader(dataset.StateActionEffectDataset("blocks2_v2", "val"), batch_size=1024)
+    cnt_trainloader = torch.utils.data.DataLoader(dataset.StateActionEffectDataset("blocks234", "train"), batch_size=1024)
+    cnt_valloader = torch.utils.data.DataLoader(dataset.StateActionEffectDataset("blocks234", "val"), batch_size=1024)
     # compute the dataset
     trainset = collate_preds(trainer.predict(model, cnt_trainloader))
     valset = collate_preds(trainer.predict(model, cnt_valloader))
@@ -633,9 +688,11 @@ if __name__ == "__main__":
 
     train_class_to_effect = {v: k for k, v in train_effect_classes.items()}
     effect_counts = get_effect_counts(train_effects, np.ones(len(trainset), dtype=bool))
-    selected_classes = get_top_classes(effect_counts, 0.95, len(trainset))
+    selected_classes = get_top_classes(effect_counts, 0.99, len(trainset))
     filtered_effects = filter_effect_classes(train_effects, selected_classes)
     filtered_counts = get_effect_counts(filtered_effects, np.ones(len(trainset), dtype=bool))
+    for sc in selected_classes:
+        print(f"{sc}: {train_class_to_effect[sc]}, count: {filtered_counts[sc]}")
 
     unique_object_values = trainset.tensors[0].int().flatten(0, 1).unique(dim=0)
     unique_action_values = trainset.tensors[2].int().flatten(0, 1).unique(dim=0)
