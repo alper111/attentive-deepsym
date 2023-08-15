@@ -131,11 +131,13 @@ def matrix_to_tuple(matrix):
 
 def preprocess_data(o_i, r_i, a, o_f, r_f, m):
     o_i = o_i[0, m[0]].int()
-    o_f = o_f[0, m[0]].int()
+    if o_f is not None:
+        o_f = o_f[0, m[0]].int()
     c = m.sum()
     mm = (m.T.float() @ m.float()).bool()
     r_i = r_i[0, :, mm].reshape(4, c, c).int()
-    r_f = r_f[0, :, mm].reshape(4, c, c).int()
+    if r_f is not None:
+        r_f = r_f[0, :, mm].reshape(4, c, c).int()
     a = a[0, m[0]].int()
     return o_i, r_i, a, o_f, r_f
 
