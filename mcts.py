@@ -427,7 +427,7 @@ class MCTSNode:
             actions = self.best_actions(n=n)
             selected = []
             for action in actions:
-                if np.random.rand() < 0:  # TODO: this is only for ILP, set it to 0.05 later
+                if np.random.rand() < 1:  # TODO: this is only for ILP, set it to 0.05 later
                     next_state = self._forward_fn(self.state, action)
                     children_states = list(map(lambda x: x.state, self.children[action]))
                     result, out_idx = utils.in_array(next_state, children_states)
@@ -435,8 +435,7 @@ class MCTSNode:
                         self.children[action].append(MCTSNode(node_id=MCTSNode.total_nodes,
                                                               parent=self,
                                                               state=next_state,
-                                                              forward_fn=self._forward_fn,
-                                                              n_nodes=self.n_nodes+1))
+                                                              forward_fn=self._forward_fn))
                         MCTSNode.total_nodes += 1
                         selected.append(self.children[action][-1]._tree_policy()[0])
                         # return self.children[action][-1]._tree_policy()
@@ -637,7 +636,8 @@ class TreeForward(MCTSForward):
         probs = [x[2] for x in pred]
         sampled_pred = pred[np.random.choice(len(pred), p=probs)]
         obj_symbol_next, rel_symbol_next, _ = sampled_pred
-        next_state = TreeSymbolicState(state=(obj_symbol_next[0], rel_symbol_next[0]), goal=state.goal)
+        next_state = TreeSymbolicState(state=(deepcopy(obj_symbol_next[0]), deepcopy(rel_symbol_next[0])),
+                                       goal=deepcopy(state.goal))
         return next_state
 
 
@@ -663,10 +663,10 @@ class TreeSymbolicState(MCTSState):
         return available_actions
 
     def is_terminal(self):
-        return (self.state[0] == self.goal[0]) and (self.state[1] == self.goal[1])
+        return (self.state[0] == self.goal[0]).all() and (self.state[1] == self.goal[1]).all()
 
     def is_equal(self, other):
-        return (self.state[0] == other.state[0]) and (self.state[1] == other.state[1])
+        return (self.state[0] == other.state[0]).all() and (self.state[1] == other.state[1]).all()
 
     def __repr__(self):
         return str(self.state)
