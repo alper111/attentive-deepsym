@@ -92,16 +92,19 @@ def create_effect_classes(loader, given_effect_to_class=None):
     return effects, changed_indices, effect_to_class
 
 
-def get_top_classes(sorted_effect_counts, perc, dataset_size):
+def get_top_classes(sorted_effect_counts, dataset_size, total_perc=None, min_samples=None):
+    assert total_perc is not None or min_samples is not None
     total_count = 0
     selected_keys = []
     for key in sorted_effect_counts:
         count = sorted_effect_counts[key]
         total_count += count
-        selected_keys.append(key)
-        if total_count/dataset_size >= perc:
+        if (min_samples is not None) and (count < min_samples):
             break
-    return selected_keys
+        if (total_perc is not None) and ((total_count / dataset_size) > total_perc):
+            break
+        selected_keys.append(key)
+    return selected_keys, total_count/dataset_size
 
 
 def get_effect_counts(effects, gating):
@@ -679,8 +682,12 @@ if __name__ == "__main__":
 
     model, _ = load_ckpt(args.n, tag="best")
     trainer = pl.Trainer(devices=[0])
-    cnt_trainloader = torch.utils.data.DataLoader(dataset.StateActionEffectDataset("blocks234", "train"), batch_size=1024)
-    cnt_valloader = torch.utils.data.DataLoader(dataset.StateActionEffectDataset("blocks234", "val"), batch_size=1024)
+    cnt_trainloader = torch.utils.data.DataLoader(
+        dataset.StateActionEffectDataset("blocks234", "train", obj_relative=True),
+        batch_size=1024)
+    cnt_valloader = torch.utils.data.DataLoader(
+        dataset.StateActionEffectDataset("blocks234", "val", obj_relative=True),
+        batch_size=1024)
     # compute the dataset
     trainset = collate_preds(trainer.predict(model, cnt_trainloader))
     valset = collate_preds(trainer.predict(model, cnt_valloader))
@@ -690,11 +697,12 @@ if __name__ == "__main__":
 
     train_class_to_effect = {v: k for k, v in train_effect_classes.items()}
     effect_counts = get_effect_counts(train_effects, np.ones(len(trainset), dtype=bool))
-    selected_classes = get_top_classes(effect_counts, 0.99, len(trainset))
+    selected_classes, perc_covered = get_top_classes(effect_counts, len(trainset), min_samples=200)
     filtered_effects = filter_effect_classes(train_effects, selected_classes)
     filtered_counts = get_effect_counts(filtered_effects, np.ones(len(trainset), dtype=bool))
     for sc in selected_classes:
         print(f"{sc}: {train_class_to_effect[sc]}, count: {filtered_counts[sc]}")
+    print(f"Total perc: {perc_covered} ({len(selected_classes)} classes)")
 
     unique_object_values = trainset.tensors[0].int().flatten(0, 1).unique(dim=0)
     unique_action_values = trainset.tensors[2].int().flatten(0, 1).unique(dim=0)
@@ -702,7 +710,7 @@ if __name__ == "__main__":
 
     root = learn_tree(trainloader, filtered_effects, train_changed_indices,
                       train_effect_values, unique_object_values, unique_action_values,
-                      min_samples_split=50, num_procs=args.p)
+                      min_samples_split=200, num_procs=args.p)
 
     save_path = os.path.join("out", args.n)
     if not os.path.exists(save_path):
