@@ -594,7 +594,7 @@ class TreeForward(MCTSForward):
         preds = []
         o_i, r_i, a, _, _, _ = sample
         o_f = o_i.clone()
-        r_i = r_i.clone()
+        r_f = r_i.clone()
         for binding in bindings:
             binding_pred = []
             for effect in named_effects:
@@ -613,8 +613,8 @@ class TreeForward(MCTSForward):
                                     continue
                                 idx1 = int(binding[name1])
                                 idx2 = int(binding[name2])
-                                r_i[0, j-1, idx1, idx2] = torch.tensor(val)
-                binding_pred.append((o_f.clone(), r_i.clone(), named_effects[effect]))
+                                r_f[0, j-1, idx1, idx2] = torch.tensor(val)
+                binding_pred.append((o_f.clone(), r_f.clone(), named_effects[effect]))
             count = sum([x[2] for x in binding_pred])
             binding_pred = [(x[0], x[1], x[2]/count) for x in binding_pred]
             preds.append(binding_pred)
