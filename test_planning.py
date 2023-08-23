@@ -52,12 +52,12 @@ if __name__ == "__main__":
                     print(subsym_init.state[:, :3], file=open(os.path.join(exp_folder, "pred.txt"), "w"))
                     print(subsym_init.goal[:, :3], file=open(os.path.join(exp_folder, "pred.txt"), "a"))
                     print(subsym_init.state[:, :3] - subsym_init.goal[:, :3],
-                        file=open(os.path.join(exp_folder, "pred.txt"), "a"))
+                          file=open(os.path.join(exp_folder, "pred.txt"), "a"))
                 else:
                     print(subsym_init.state[:, :3], file=open(os.path.join(exp_folder, "pred.txt"), "w"))
                     print(subsym_init.goal[:, :3], file=open(os.path.join(exp_folder, "pred.txt"), "a"))
                     print(subsym_init.state[:, :3] - subsym_init.goal[:, :3],
-                        file=open(os.path.join(exp_folder, "pred.txt"), "a"))
+                          file=open(os.path.join(exp_folder, "pred.txt"), "a"))
 
         cum_errors = {k: 100*torch.stack(v) for k, v in cum_errors.items()}
         one_step_errors = {k: 100*torch.stack(v) for k, v in one_step_errors.items()}
