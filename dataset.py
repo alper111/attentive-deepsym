@@ -38,7 +38,7 @@ class StateActionEffectDM(pl.LightningDataModule):
 
 
 class StateActionEffectDataset(torch.utils.data.Dataset):
-    def __init__(self, name, split="train", obj_relative=False):
+    def __init__(self, name, split="train", obj_relative=False, n=0):
         path = os.path.join("data", name)
         self.obj_relative = obj_relative
         self.state = torch.load(os.path.join(path, "state.pt"))
@@ -71,6 +71,12 @@ class StateActionEffectDataset(torch.utils.data.Dataset):
             self.effect = self.effect[n_train+n_val:]
             self.mask = self.mask[n_train+n_val:]
             self.post_state = self.post_state[n_train+n_val:]
+        if n > 0:
+            self.state = self.state[:n]
+            self.action = self.action[:n]
+            self.effect = self.effect[:n]
+            self.mask = self.mask[:n]
+            self.post_state = self.post_state[:n]
 
     def __len__(self):
         return len(self.state)
