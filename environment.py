@@ -449,6 +449,16 @@ class BlocksWorld_v4(BlocksWorld):
     def state(self):
         return self._state_obj_poses_and_types()
 
+    def state_concat(self):
+        pose, obj_types = self._state_obj_poses_and_types()
+        one_hot = np.array([[0, 0, 0, 0],
+                            [0, 0, 0, 1],
+                            [0, 0, 1, 0],
+                            [0, 1, 0, 0],
+                            [1, 0, 0, 0]])
+        state = np.concatenate([pose, one_hot[obj_types]], axis=1)
+        return state
+
     def full_random_action(self):
         obj1_id, obj2_id = np.random.choice(list(self.obj_dict.keys()), size=(2,), replace=False)
         if self.obj_types[self.obj_dict[obj1_id]] == 4:
