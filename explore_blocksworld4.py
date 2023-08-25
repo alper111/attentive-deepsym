@@ -13,7 +13,6 @@ buffer = []
 def collect_rollout(env):
     action = env.full_random_action()
     pre_position, effect = env.step(*action)
-    print(pre_position, effect)
     post_position = env.state()
     return pre_position, action, effect, post_position
 
