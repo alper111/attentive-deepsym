@@ -12,9 +12,10 @@ buffer = []
 
 def collect_rollout(env):
     action = env.full_random_action()
-    position, effect, types = env.step(*action)
-    post_position, _ = env.state()
-    return position, types, action, effect, post_position
+    pre_position, effect = env.step(*action)
+    print(pre_position, effect)
+    post_position = env.state()
+    return pre_position, action, effect, post_position
 
 
 if __name__ == "__main__":
@@ -27,22 +28,18 @@ if __name__ == "__main__":
 
     if not os.path.exists(args.o):
         os.makedirs(args.o)
-    env = environment.BlocksWorld_v4(gui=0, min_objects=4, max_objects=4)
+    env = environment.BlocksWorld_v4(gui=1, min_objects=2, max_objects=4)
     np.random.seed()
 
-    # (x, y, z, cos_rx, sin_rx, cos_ry, sin_ry, cos_rz, sin_rz, type)
-    states = torch.zeros(args.N, env.max_objects, 10, dtype=torch.float)
+    # (pos, quat, type)
+    states = torch.zeros(args.N, env.max_objects, 11, dtype=torch.float)
     # (obj_i, obj_j, from_x, from_y, to_x, to_y, rot_init, rot_final)
     actions = torch.zeros(args.N, 8, dtype=torch.int)
     # how many objects are there in the scene
     masks = torch.zeros(args.N, dtype=torch.int)
-    # (x_f-x_i, y_f-y_i, z_f-z_i,
-    #  cos_rx_f-cos_rx_i, sin_rx_f-sin_rx_i,
-    #  cos_ry_f-cos_ry_i, sin_ry_f-sin_ry_i,
-    #  cos_rz_f-cos_rz_i, sin_rz_f-sin_rz_i)
-    # for before picking and after releasing
-    effects = torch.zeros(args.N, env.max_objects, 18, dtype=torch.float)
-    post_states = torch.zeros(args.N, env.max_objects, 10, dtype=torch.float)
+    # (∆pos_grasp, ∆quat_grasp, ∆pos_release, ∆quat_release)
+    effects = torch.zeros(args.N, env.max_objects, 14, dtype=torch.float)
+    post_states = torch.zeros(args.N, env.max_objects, 11, dtype=torch.float)
 
     start = time.time()
     env_it = 0
@@ -53,18 +50,17 @@ if __name__ == "__main__":
             env_it = 0
             env.reset_objects()
 
-        position_pre, obj_types, action, effect, position_post = collect_rollout(env)
-        if effect[action[0], 2] < 0.1:
+        pre_position, action, effect, post_position = collect_rollout(env)
+        # if the target object couldn't be picked up, skip with a probability
+        if effect[action[0], 2] < 0.1 and np.random.rand() < 0.8:
             env_it += 1
             continue
         env_it += 1
-        states[i, :env.num_objects, :-1] = torch.tensor(position_pre, dtype=torch.float)
-        states[i, :env.num_objects, -1] = torch.tensor(obj_types, dtype=torch.float)
+        states[i, :env.num_objects] = torch.tensor(pre_position, dtype=torch.float)
         actions[i] = torch.tensor(action, dtype=torch.int)
         masks[i] = env.num_objects
         effects[i, :env.num_objects] = torch.tensor(effect, dtype=torch.float)
-        post_states[i, :env.num_objects, :-1] = torch.tensor(position_post, dtype=torch.float)
-        post_states[i, :env.num_objects, -1] = torch.tensor(obj_types, dtype=torch.float)
+        post_states[i, :env.num_objects] = torch.tensor(post_position, dtype=torch.float)
 
         i += 1
         if i % (args.N // 100) == 0:
