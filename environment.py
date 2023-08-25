@@ -1,7 +1,6 @@
 import pybullet
 import pybullet_data
 import numpy as np
-import random
 
 import utils
 import manipulators
@@ -297,9 +296,11 @@ class BlocksWorld_v4(BlocksWorld):
         self.agent._waitsleep(2)
         state4 = self.state()
         delta_pos1 = state2[:, :3] - state1[:, :3]
-        delta_quat1 = np.stack([self._p.getDifferenceQuaternion(q2, q1) for q1, q2 in zip(state1[:, 3:7], state2[:, 3:7])])
+        delta_quat1 = np.stack([self._p.getDifferenceQuaternion(q2, q1) for q1, q2 in zip(state1[:, 3:7],
+                                                                                          state2[:, 3:7])])
         delta_pos2 = state4[:, :3] - state3[:, :3]
-        delta_quat2 = np.stack([self._p.getDifferenceQuaternion(q2, q1) for q1, q2 in zip(state3[:, 3:7], state4[:, 3:7])])
+        delta_quat2 = np.stack([self._p.getDifferenceQuaternion(q2, q1) for q1, q2 in zip(state3[:, 3:7],
+                                                                                          state4[:, 3:7])])
         effect = np.concatenate([delta_pos1, delta_quat1, delta_pos2, delta_quat2], axis=-1)
         if get_images:
             return state1, effect, images
