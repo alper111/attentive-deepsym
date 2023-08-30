@@ -7,6 +7,7 @@ import torchvision
 from models import load_ckpt
 import environment
 import utils
+import mcts
 
 
 def save_image(env, name):
@@ -24,6 +25,7 @@ if __name__ == "__main__":
 
     model, _ = load_ckpt(args.n, tag="best")
     model.freeze()
+    forward_fn = mcts.SubsymbolicForwardModel(model, obj_relative=True)
     env = environment.BlocksWorld_v4(gui=1, min_objects=4, max_objects=4)
     np.random.seed(int(args.s))
     env.reset_objects()
@@ -34,7 +36,6 @@ if __name__ == "__main__":
     prev_r = None
     while True:
         it += 1
-        save_image(env, f"{seed}_{it}.png")
         state = torch.tensor(env.state_concat(), dtype=torch.float).unsqueeze(0)
         n_obj = state.shape[1]
         pad_mask = torch.ones(1, n_obj)
@@ -80,8 +81,6 @@ if __name__ == "__main__":
                         print_str += ", "
                 print_str += "]"
                 print(print_str, end="")
-                # for j in range(n_obj):
-                # print(f" -- {i}{r[0, k, i, :].int().tolist()}", end="")
             print()
 
         prev_z = z.clone()
@@ -98,6 +97,16 @@ if __name__ == "__main__":
             prev_z = None
             prev_r = None
             continue
+
         action = action_str.split(",")
         action = [int(a) for a in action]
+        action_str = f"{action[0]},0,{action[1]},{action[2]},0,{action[3]}"
+        init_st = mcts.SubsymbolicState(state[0], state[0])
+        next_st = forward_fn(init_st, action_str)
+        arrows = []
+        for obj_before, obj_after in zip(init_st.state, next_st.state):
+            arrows.append(utils.create_arrow(env._p, obj_before[:3], obj_after[:3]))
+        save_image(env, f"{seed}_{it}.png")
         env.step(action[0], action[2], 0, action[1], 0, action[3], 1, 1)
+        for arrow in arrows:
+            env._p.removeBody(arrow)

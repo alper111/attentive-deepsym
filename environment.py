@@ -182,8 +182,16 @@ class BlocksWorld_v4(BlocksWorld):
         self.sizes = [[single_size, single_size, 0.05],
                       [single_size, 5*single_size, 0.025],
                       [5*single_size, 0.025, single_size]]
-        self.debug_items = []
 
+        ##
+        self.colors = [[1.0, 0.0, 0.0, 1.0],
+                       [0.0, 1.0, 0.0, 1.0],
+                       [0.0, 0.0, 1.0, 1.0],
+                       [1.0, 1.0, 0.0, 1.0],
+                       [1.0, 0.0, 1.0, 1.0],
+                       [0.0, 1.0, 1.0, 1.0]]
+        ##
+        self.debug_items = []
         super(BlocksWorld_v4, self).__init__(**kwargs)
         self.previous_action = 0
 
@@ -228,7 +236,7 @@ class BlocksWorld_v4(BlocksWorld):
         self.obj_types[o_id] = obj_type
         return o_id
 
-    def create_object(self, obj_type, x, y, z=0.5):
+    def create_object(self, obj_type, x, y, z=0.5, color=None):
         """
         Add an object ot the world, without collusions
         return -1 if it is not possible
@@ -252,27 +260,27 @@ class BlocksWorld_v4(BlocksWorld):
         if obj_type == 0:
             o_id = utils.create_object(p=self._p, obj_type=self._p.GEOM_SPHERE,
                                        size=size, position=position, rotation=[0, 0, 0],
-                                       mass=0.1, color="random")
+                                       mass=0.1, color=color)
         elif obj_type == 1:
             o_id = (utils.create_object(p=self._p, obj_type=self._p.GEOM_BOX,
                                         size=size, position=position, rotation=[0, 0, 0],
-                                        mass=0.1, color="random"))
+                                        mass=0.1, color=color))
         elif obj_type == 2:
             o_id = (utils.create_object(p=self._p, obj_type=self._p.GEOM_CYLINDER,
                                         size=size, position=position, rotation=[0, 0, 0],
-                                        mass=0.1, color="random"))
+                                        mass=0.1, color=color))
         elif obj_type == 3:
             o_id = (utils.create_object(p=self._p, obj_type=self._p.GEOM_BOX,
                                         size=size, position=position, rotation=[0, 0, 0],
-                                        mass=0.1, color="random"))
+                                        mass=0.1, color=color))
         elif obj_type == 4:
             o_id = (utils.create_object(p=self._p, obj_type=self._p.GEOM_BOX,
                                         size=size, position=position, rotation=[0, 0, 0],
-                                        mass=0.1, color="random"))
+                                        mass=0.1, color=color))
         elif obj_type == 5:
             o_id = (utils.create_object(p=self._p, obj_type=self._p.GEOM_BOX,
                                         size=size, position=position, rotation=[0, 0, np.pi],
-                                        mass=0.1, color="random"))
+                                        mass=0.1, color=color))
         self.obj_types[o_id] = obj_type
         return o_id
 
@@ -291,6 +299,8 @@ class BlocksWorld_v4(BlocksWorld):
         obj_ids = []
         self.num_objects = np.random.randint(self.min_objects, self.max_objects+1)
         obj_types = np.random.choice([1, 4], size=(self.num_objects,), replace=True)
+        colors = np.random.choice([0, 1, 2, 3, 4, 5], size=(self.num_objects,), replace=False)
+        colors = [self.colors[c] for c in colors]
 
         i = 0
         positions = []
@@ -318,7 +328,7 @@ class BlocksWorld_v4(BlocksWorld):
                         continue
 
             trials = 0
-            obj_id = self.create_object(obj_type, x, y, z)
+            obj_id = self.create_object(obj_type, x, y, z, colors[i])
             if obj_id == -1:
                 continue
 
