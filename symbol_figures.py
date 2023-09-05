@@ -5,6 +5,7 @@ import torch
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 import matplotlib
+from tqdm import tqdm
 
 from models import load_ckpt, AttentiveDeepSym, MultiDeepSym, DeepSym
 from dataset import StateActionEffectDataset

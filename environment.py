@@ -159,83 +159,6 @@ class BlocksWorld(GenericEnv):
         return effect
 
 
-class BlocksWorld_v2(BlocksWorld):
-    def __init__(self, **kwargs):
-        self.traj_t = 1.5
-        self.locs = {
-            0: [0.8, -0.18, 0.41],
-            1: [0.8, 0.0, 0.41],
-            2: [0.8, 0.18, 0.41],
-            3: [0.5, -0.3, 0.41],
-            4: [0.5, 0.0, 0.41],
-            5: [0.5, 0.3, 0.41]
-        }
-        self.sizes = [[0.025, 0.025, 0.05], [0.025, 0.2, 0.025]]
-        super(BlocksWorld_v2, self).__init__(**kwargs)
-
-    def init_objects(self):
-        if self.min_objects == 1:
-            self.num_objects = np.random.choice([1, 2, 3], p=[0.1, 0.2, 0.7])
-        else:
-            self.num_objects = 3
-        obj_types = [1, 0, 0]
-        R = np.random.permutation(3)
-        self.current_obj_locs = [[] for _ in self.locs]
-        i = 0
-        obj_ids = []
-        while i < self.num_objects:
-            loc_idx = np.random.randint(3, 6)
-            size_idx = obj_types[R[i]]
-            if len(self.current_obj_locs[loc_idx]) > 0:
-                continue
-
-            position = self.locs[loc_idx][:2] + [0.6]
-            size = self.sizes[size_idx]
-            self.current_obj_locs[loc_idx].append(0)
-            obj_ids.append(utils.create_object(p=self._p, obj_type=self._p.GEOM_BOX,
-                                               size=size, position=position, rotation=[0, 0, 0],
-                                               mass=0.1, color="random"))
-            i += 1
-        for i, o_id in enumerate(sorted(obj_ids)):
-            self.obj_dict[i] = o_id
-
-    def step(self, from_loc, to_loc, sleep=False):
-        target_quat = self._p.getQuaternionFromEuler([np.pi, 0, np.pi/2])
-        from_pos = self.locs[from_loc]
-        from_top_pos = from_pos[:2] + [0.8]
-        to_pos = self.locs[to_loc]
-        to_top_pos = to_pos[:2] + [0.8]
-
-        before_pose = self.state_obj_poses()
-        self.agent.set_cartesian_position(from_top_pos, orientation=target_quat, t=self.traj_t, traj=True, sleep=sleep)
-        self.agent.move_in_cartesian(from_pos, orientation=target_quat, t=self.traj_t, sleep=sleep)
-        self.agent.close_gripper(self.traj_t, sleep=sleep)
-        self.agent.move_in_cartesian(from_top_pos, orientation=target_quat, t=self.traj_t, sleep=sleep)
-        self.agent.move_in_cartesian(to_top_pos, orientation=target_quat, t=self.traj_t, sleep=sleep, ignore_force=True)
-        self.agent._waitsleep(0.3, sleep=sleep)
-        self.agent.move_in_cartesian(to_pos, orientation=target_quat, t=self.traj_t, sleep=sleep)
-        self.agent._waitsleep(0.5, sleep=sleep)
-        self.agent.open_gripper(self.traj_t, sleep=sleep)
-        self.agent.move_in_cartesian(to_top_pos, orientation=target_quat, t=self.traj_t, sleep=sleep)
-        self.init_agent_pose(t=1.0, sleep=sleep)
-        after_pose = self.state_obj_poses()
-        effect = after_pose - before_pose
-        if len(self.current_obj_locs[from_loc]) > 0:
-            self.current_obj_locs[from_loc].pop()
-        self.current_obj_locs[to_loc].append(0)
-        return effect
-
-    def sample_random_action(self):
-        if np.random.rand() < 0.2:
-            # there might be actions that does not pick any objects
-            from_idx = np.random.randint(6)
-        else:
-            from_idx = np.random.choice([i for i in range(len(self.current_obj_locs))
-                                         if len(self.current_obj_locs[i]) > 0])
-        to_idx = np.random.randint(6)
-        return (from_idx, to_idx)
-
-
 class BlocksWorld_v4(BlocksWorld):
     def __init__(self, x_area=0.5, y_area=1.0, **kwargs):
         self.traj_t = 1.5
@@ -259,8 +182,16 @@ class BlocksWorld_v4(BlocksWorld):
         self.sizes = [[single_size, single_size, 0.05],
                       [single_size, 5*single_size, 0.025],
                       [5*single_size, 0.025, single_size]]
-        self.debug_items = []
 
+        ##
+        self.colors = [[1.0, 0.0, 0.0, 1.0],
+                       [0.0, 1.0, 0.0, 1.0],
+                       [0.0, 0.0, 1.0, 1.0],
+                       [1.0, 1.0, 0.0, 1.0],
+                       [1.0, 0.0, 1.0, 1.0],
+                       [0.0, 1.0, 1.0, 1.0]]
+        ##
+        self.debug_items = []
         super(BlocksWorld_v4, self).__init__(**kwargs)
         self.previous_action = 0
 
@@ -305,7 +236,7 @@ class BlocksWorld_v4(BlocksWorld):
         self.obj_types[o_id] = obj_type
         return o_id
 
-    def create_object(self, obj_type, x, y, z=0.5):
+    def create_object(self, obj_type, x, y, z=0.5, color=None):
         """
         Add an object ot the world, without collusions
         return -1 if it is not possible
@@ -329,27 +260,27 @@ class BlocksWorld_v4(BlocksWorld):
         if obj_type == 0:
             o_id = utils.create_object(p=self._p, obj_type=self._p.GEOM_SPHERE,
                                        size=size, position=position, rotation=[0, 0, 0],
-                                       mass=0.1, color="random")
+                                       mass=0.1, color=color)
         elif obj_type == 1:
             o_id = (utils.create_object(p=self._p, obj_type=self._p.GEOM_BOX,
                                         size=size, position=position, rotation=[0, 0, 0],
-                                        mass=0.1, color="random"))
+                                        mass=0.1, color=color))
         elif obj_type == 2:
             o_id = (utils.create_object(p=self._p, obj_type=self._p.GEOM_CYLINDER,
                                         size=size, position=position, rotation=[0, 0, 0],
-                                        mass=0.1, color="random"))
+                                        mass=0.1, color=color))
         elif obj_type == 3:
             o_id = (utils.create_object(p=self._p, obj_type=self._p.GEOM_BOX,
                                         size=size, position=position, rotation=[0, 0, 0],
-                                        mass=0.1, color="random"))
+                                        mass=0.1, color=color))
         elif obj_type == 4:
             o_id = (utils.create_object(p=self._p, obj_type=self._p.GEOM_BOX,
                                         size=size, position=position, rotation=[0, 0, 0],
-                                        mass=0.1, color="random"))
+                                        mass=0.1, color=color))
         elif obj_type == 5:
             o_id = (utils.create_object(p=self._p, obj_type=self._p.GEOM_BOX,
                                         size=size, position=position, rotation=[0, 0, np.pi],
-                                        mass=0.1, color="random"))
+                                        mass=0.1, color=color))
         self.obj_types[o_id] = obj_type
         return o_id
 
@@ -368,6 +299,8 @@ class BlocksWorld_v4(BlocksWorld):
         obj_ids = []
         self.num_objects = np.random.randint(self.min_objects, self.max_objects+1)
         obj_types = np.random.choice([1, 4], size=(self.num_objects,), replace=True)
+        colors = np.random.choice([0, 1, 2, 3, 4, 5], size=(self.num_objects,), replace=False)
+        colors = [self.colors[c] for c in colors]
 
         i = 0
         positions = []
@@ -395,7 +328,7 @@ class BlocksWorld_v4(BlocksWorld):
                         continue
 
             trials = 0
-            obj_id = self.create_object(obj_type, x, y, z)
+            obj_id = self.create_object(obj_type, x, y, z, colors[i])
             if obj_id == -1:
                 continue
 
@@ -525,6 +458,16 @@ class BlocksWorld_v4(BlocksWorld):
 
     def state(self):
         return self._state_obj_poses_and_types()
+
+    def state_concat(self):
+        pose, obj_types = self._state_obj_poses_and_types()
+        one_hot = np.array([[0, 0, 0, 0],
+                            [0, 0, 0, 1],
+                            [0, 0, 1, 0],
+                            [0, 1, 0, 0],
+                            [1, 0, 0, 0]])
+        state = np.concatenate([pose, one_hot[obj_types]], axis=1)
+        return state
 
     def full_random_action(self):
         obj1_id, obj2_id = np.random.choice(list(self.obj_dict.keys()), size=(2,), replace=False)
