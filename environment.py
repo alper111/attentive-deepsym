@@ -7,6 +7,60 @@ import utils
 import manipulators
 
 
+class EmptyEnv:
+    def __init__(self, gui=0):
+        self._p = utils.connect(gui)
+        self.obj_dict = {}
+        self.arrows = []
+        self.reset()
+
+    def reset(self):
+        self._p.resetSimulation()
+        self._p.configureDebugVisualizer(self._p.COV_ENABLE_GUI, 0)
+        self._p.setAdditionalSearchPath(pybullet_data.getDataPath())
+        self._p.setGravity(0, 0, -9.807)
+        self._p.loadURDF("plane.urdf")
+        self.env_dict = utils.create_tabletop(self._p)
+
+        self.delete_objects()
+
+    def delete_objects(self):
+        for key in self.obj_dict:
+            obj_id = self.obj_dict[key]
+            self._p.removeBody(obj_id)
+        for arrow in self.arrows:
+            self._p.removeBody(arrow)
+        self.obj_dict = {}
+        self.arrows = []
+        self.obj_counter = 0
+
+    def reset_objects(self):
+        self.delete_objects()
+        self._step(240)
+
+    def add_object(self, position, type, color):
+        if type == 1:
+            size = [0.025, 0.025, 0.05]
+        else:
+            size = [0.025, 0.125, 0.025]
+        self.obj_dict[self.obj_counter] = utils.create_object(
+            p=self._p,
+            obj_type=self._p.GEOM_BOX,
+            size=size,
+            position=position,
+            mass=0,
+            color=color
+        )
+        self.obj_counter += 1
+
+    def add_arrow(self, start, end, color):
+        self.arrows.append(utils.create_arrow(self._p, start, end))
+
+    def _step(self, count=1):
+        for _ in range(count):
+            self._p.stepSimulation()
+
+
 class GenericEnv:
     def __init__(self, gui=0, seed=None):
         self._p = utils.connect(gui)
