@@ -133,7 +133,6 @@ def detect_and_predict(env, forward_fn):
     end = time.time()
     print(f"Env time: {end - start}")
 
-
     o1 = torch.cat([o1, torch.tensor([1, 0, 1, 0, 1, 0, 1, 0, 0, 0])]).float()
     o2 = torch.cat([o2, torch.tensor([1, 0, 1, 0, 1, 0, 1, 0, 0, 0])]).float()
     o3 = torch.cat([o3, torch.tensor([1, 0, 1, 0, 1, 0, 0, 0, 0, 1])]).float()
@@ -251,21 +250,3 @@ if __name__ == "__main__":
     dpg.set_primary_window("Main Window", True)
     dpg.start_dearpygui()
     dpg.destroy_context()
-    # with dpg.is_dearpygui_running():
-
-    # for i in range(10):
-
-        # has_red = rgb[:, 0] > 150
-        # no_red = rgb[:, 0] < 50
-        # has_green = rgb[:, 1] > 100
-        # no_green = rgb[:, 1] < 50
-        # has_blue = rgb[:, 2] > 85
-        # no_blue = rgb[:, 2] < 50
-        # is_blue = np.logical_and(has_blue, no_red)
-        # is_red = np.logical_and(has_red, no_green)
-        # is_yellow = np.logical_and(np.logical_and(has_red, has_green), no_blue)
-        # is_white = np.logical_and(np.logical_and(has_red, has_green), has_blue)
-        # plt.scatter(xyz[mask, 0], xyz[mask, 1], c=rgb[mask]/255.0)
-        # mask = np.logical_and(mask, is_white)
-        # plt.scatter(xyz[mask, 0], xyz[mask, 1], c=[0., 1., 1])
-        # plt.show()
