@@ -1,0 +1,3 @@
+# Discovering Predictive Relational Object Symbols with Symbolic Attentive Layers
+
+Details soon...
