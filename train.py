@@ -45,5 +45,6 @@ else:
         raise ValueError("Invalid model name.")
 
 dm = StateActionEffectDM(config["dataset_name"], batch_size=config["batch_size"],
-                         obj_relative=config["obj_relative"] if "obj_relative" in config else False)
+                         obj_relative=config["obj_relative"] if "obj_relative" in config else False,
+                         n=config["n"] if "n" in config else 0)
 trainer.fit(model, datamodule=dm, ckpt_path=ckpt_path)
