@@ -7,23 +7,25 @@ import lightning.pytorch as pl
 
 
 class StateActionEffectDM(pl.LightningDataModule):
-    def __init__(self, name, batch_size=32, num_workers=0, obj_relative=False):
+    def __init__(self, name, batch_size=32, num_workers=0, obj_relative=False, n=0):
         super().__init__()
         self.name = name
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.obj_relative = obj_relative
+        self.n = n
 
     def prepare_data(self):
         self.data_path = os.path.join("data", self.name)
-        artifact = wandb.use_artifact(f"{wandb.api.default_entity}/attentive-deepsym/{self.name}:latest", type="dataset")
+        artifact = wandb.use_artifact(f"{wandb.api.default_entity}/attentive-deepsym/{self.name}:latest",
+                                      type="dataset")
         if not os.path.exists(self.data_path):
             artifact.download(root=self.data_path)
             archive = zipfile.ZipFile(os.path.join(self.data_path, f"{self.name}.zip"), "r")
             archive.extractall(self.data_path)
             archive.close()
             os.remove(os.path.join(self.data_path, f"{self.name}.zip"))
-        self.train_set = StateActionEffectDataset(self.name, split="train", obj_relative=self.obj_relative)
+        self.train_set = StateActionEffectDataset(self.name, split="train", obj_relative=self.obj_relative, n=self.n)
         self.val_set = StateActionEffectDataset(self.name, split="val", obj_relative=self.obj_relative)
 
     def train_dataloader(self):
