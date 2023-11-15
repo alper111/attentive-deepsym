@@ -7,7 +7,6 @@ import torch
 
 import utils
 from models import DeepSym
-from learn_rules import is_satisfied
 
 
 class Tree:
@@ -571,109 +570,6 @@ class SymbolicForwardModel(MCTSForward):
         rel_symbol_next = rel_symbol_next.sigmoid().bernoulli()[0]
         str_state = utils.to_str_state(obj_symbol_next, rel_symbol_next, torch.ones(obj_symbol_next.shape[0]))
         return SymbolicState(state=deepcopy(str_state), goal=deepcopy(state.goal))
-
-
-class TreeForward(MCTSForward):
-    def __init__(self, tree, rel_idx):
-        self.tree = tree
-        self.rel_idx = rel_idx
-
-    def _classify(self, sample, node, bindings=None, path=[]):
-        if node.left is None and node.right is None:
-            _, bindings = is_satisfied(sample, node.object_bindings,
-                                       node.action_bindings, node.relation_bindings)
-            return node, bindings, path
-        else:
-            satisfied, bindings = is_satisfied(sample, node.left.object_bindings,
-                                               node.left.action_bindings, node.left.relation_bindings)
-            if satisfied:
-                return self._classify(sample, node.left, bindings, [*path, 0])
-            else:
-                return self._classify(sample, node.right, bindings, [*path, 1])
-
-    def _node_forward(self, sample, bindings, named_effects):
-        preds = []
-        o_i, r_i, a, _, _, _ = sample
-        o_f = o_i.clone()
-        r_f = r_i.clone()
-        for binding in bindings:
-            binding_pred = []
-            for effect in named_effects:
-                if self.rel_idx == 0:  # object symbol
-                    if len(effect) > 0:
-                        for name, val in effect:
-                            if name == "unk":
-                                continue
-                            idx = int(binding[name])
-                            o_f[0, idx] = torch.tensor(val)
-                else:
-                    if len(effect) > 0:
-                        for name1, name2, val in effect:
-                            if name1 == "unk" or name2 == "unk":
-                                continue
-                            idx1 = int(binding[name1])
-                            idx2 = int(binding[name2])
-                            r_f[0, self.rel_idx-1, idx1, idx2] = torch.tensor(val)
-                binding_pred.append((o_f.clone(), r_f.clone(), named_effects[effect]))
-            count = sum([x[2] for x in binding_pred])
-            binding_pred = [(x[0], x[1], x[2]/count) for x in binding_pred]
-            preds.append(binding_pred)
-        return preds
-
-    def __call__(self, state, action=None, action_vector=None):
-        assert action is not None or action_vector is not None
-        # state: (obj_symbol, rel_symbol)
-        obj_symbol, rel_symbol = state.state
-        if action is not None:
-            action = torch.tensor([int(a_i) for a_i in action.split(",")])
-            action_placeholder = torch.zeros(obj_symbol.shape[0], 8, dtype=torch.int8)  # (grasp_or_release, dx_loc, dy_loc, rot)
-            action_placeholder[action[0], :4] = torch.tensor([1, action[1], action[2], 1], dtype=torch.int8)
-            action_placeholder[action[3], 4:] = torch.tensor([1, action[4], action[5], 1], dtype=torch.int8)
-        else:
-            action_placeholder = action_vector
-        mask = torch.ones(1, obj_symbol.shape[0], dtype=torch.bool)
-        sample = (obj_symbol.unsqueeze(0), rel_symbol.unsqueeze(0), action_placeholder.unsqueeze(0), None, None, mask)
-
-        node, bindings, _ = self._classify(sample, self.tree)
-        preds = self._node_forward(sample, bindings, node.named_effects)
-        pred = preds[np.random.randint(len(preds))]
-        probs = [x[2] for x in pred]
-        sampled_pred = pred[np.random.choice(len(pred), p=probs)]
-        obj_symbol_next, rel_symbol_next, _ = sampled_pred
-        next_state = TreeSymbolicState(state=(deepcopy(obj_symbol_next[0]), deepcopy(rel_symbol_next[0])),
-                                       goal=deepcopy(state.goal))
-        return next_state
-
-
-class TreeSymbolicState(MCTSState):
-    def __init__(self, state, goal):
-        self.state = state
-        self.goal = goal
-
-    def reward(self):
-        reward = int(self.is_terminal())
-        return reward
-
-    def get_available_actions(self):
-        n_obj = self.state[0].shape[0]
-        available_actions = []
-        available_actions = []
-        for i in range(n_obj):
-            for j in range(n_obj):
-                if i != j:
-                    for jy in range(-1, 2):
-                        for iy in range(-1, 2):
-                            available_actions.append(f"{i},0,{iy},{j},0,{jy}")
-        return available_actions
-
-    def is_terminal(self):
-        return (self.state[0] == self.goal[0]).all() and (self.state[1] == self.goal[1]).all()
-
-    def is_equal(self, other):
-        return (self.state[0] == other.state[0]).all() and (self.state[1] == other.state[1]).all()
-
-    def __repr__(self):
-        return str(self.state)
 
 
 class SymbolicState(MCTSState):
