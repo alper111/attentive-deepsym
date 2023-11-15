@@ -359,9 +359,12 @@ class BlocksWorld_v4(BlocksWorld):
         obj_ids = []
         self.num_objects = np.random.randint(self.min_objects, self.max_objects+1)
         obj_types = np.random.choice([1, 4], size=(self.num_objects,), replace=True)
-        colors = np.random.choice([0, 1, 2], size=(self.num_objects,), replace=True)
+        colors = np.random.choice(np.arange(self.num_objects-1), size=(self.num_objects,), replace=True)
         color_arr = colors.copy()
-        colors = [self.colors[c] for c in colors]
+        rand_rgb = np.random.uniform(0, 1, (self.num_objects-1, 3))
+        rand_rgb = np.concatenate([rand_rgb, np.ones((self.num_objects-1, 1))], axis=1)
+        colors = [rand_rgb[c] for c in colors]
+        # colors = [self.colors[c] for c in colrs]
 
         i = 0
         positions = []
