@@ -23,11 +23,12 @@ if __name__ == "__main__":
     parser.add_argument("-T", help="interaction per episode", type=int, required=True)
     parser.add_argument("-o", help="output folder", type=str, required=True)
     parser.add_argument("-i", help="offset index", type=int, required=True)
+    parser.add_argument("-s", "--sticky", action="store_true", help="sticky objects")
     args = parser.parse_args()
 
     if not os.path.exists(args.o):
         os.makedirs(args.o)
-    env = environment.BlocksWorld_v4(gui=0, min_objects=4, max_objects=4)
+    env = environment.BlocksWorld_v4(gui=0, min_objects=4, max_objects=6, sticky=args.sticky)
     np.random.seed()
 
     # (x, y, z, cos_rx, sin_rx, cos_ry, sin_ry, cos_rz, sin_rz, type)
