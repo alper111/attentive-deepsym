@@ -133,7 +133,7 @@ def create_object(p, obj_type, size, position, rotation=[0, 0, 0], mass=1, color
     else:
         obj_id = p.createMultiBody(baseMass=mass, baseCollisionShapeIndex=collisionId, baseVisualShapeIndex=visualId,
                                    basePosition=position, baseOrientation=p.getQuaternionFromEuler(rotation))
-        p.changeDynamics(obj_id, -1, rollingFriction=0.0005, spinningFriction=0.001)
+        p.changeDynamics(obj_id, -1, rollingFriction=0.0005, spinningFriction=0.004, frictionAnchor=1)
 
     return obj_id
 
