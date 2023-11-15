@@ -126,6 +126,7 @@ class BlocksWorld(GenericEnv):
         super(BlocksWorld, self).reset(seed=seed)
 
         self.obj_dict = {}
+        self.color_dict = {}
         self.init_agent_pose(t=1)
         self.init_objects()
         self._step(40)
@@ -136,6 +137,7 @@ class BlocksWorld(GenericEnv):
             obj_id = self.obj_dict[key]
             self._p.removeBody(obj_id)
         self.obj_dict = {}
+        self.color_dict = {}
 
     def reset_objects(self):
         self.delete_objects()
@@ -214,13 +216,15 @@ class BlocksWorld(GenericEnv):
 
 
 class BlocksWorld_v4(BlocksWorld):
-    def __init__(self, x_area=0.5, y_area=1.0, **kwargs):
+    def __init__(self, x_area=0.5, y_area=1.0, sticky=False, **kwargs):
         self.traj_t = 1.5
 
         self.x_init = 0.5
         self.y_init = -0.5
         self.x_final = self.x_init + x_area
         self.y_final = self.y_init + y_area
+
+        self.sticky = sticky
 
         ds = 0.075
         self.ds = ds
@@ -248,6 +252,7 @@ class BlocksWorld_v4(BlocksWorld):
         self.debug_items = []
         super(BlocksWorld_v4, self).__init__(**kwargs)
         self.previous_action = 0
+        self.constraints = {}
 
     def create_object_from_db(self, state_row):
         obj_type = state_row[-1]
@@ -350,10 +355,12 @@ class BlocksWorld_v4(BlocksWorld):
         '''
         self.obj_buffer = []
         self.obj_types = {}
+        self.constraints = {}
         obj_ids = []
         self.num_objects = np.random.randint(self.min_objects, self.max_objects+1)
         obj_types = np.random.choice([1, 4], size=(self.num_objects,), replace=True)
-        colors = np.random.choice([0, 1, 2, 3, 4, 5], size=(self.num_objects,), replace=False)
+        colors = np.random.choice([0, 1, 2], size=(self.num_objects,), replace=True)
+        color_arr = colors.copy()
         colors = [self.colors[c] for c in colors]
 
         i = 0
@@ -371,7 +378,6 @@ class BlocksWorld_v4(BlocksWorld):
             y = np.random.uniform(self.y_init, self.y_final)
             z = 0.43
             pos = np.array([x, y])
-            positions = []
             if len(positions) > 0:
                 distances = np.linalg.norm(np.stack(positions) - pos, axis=-1)
                 if np.any(distances < 0.15):
@@ -394,8 +400,9 @@ class BlocksWorld_v4(BlocksWorld):
         self.cluster_centers = []
         for i in range(np.random.randint(1, 3)):
             self.cluster_centers.append(np.random.randint(0, self.num_objects))
-        for i, o_id in enumerate(sorted(obj_ids)):
+        for i, (o_id, c_id) in enumerate(sorted(zip(obj_ids, color_arr))):
             self.obj_dict[i] = o_id
+            self.color_dict[i] = c_id
 
     def remove_grid(self):
         for line in self.debug_items:
@@ -482,6 +489,10 @@ class BlocksWorld_v4(BlocksWorld):
         self.agent.move_in_cartesian(obj2_loc, orientation=quat2, t=self.traj_t, sleep=sleep)
         self.agent._waitsleep(0.5, sleep=sleep)
         self.agent.open_gripper()
+        if self.sticky:
+            # stick objects with the same color if they are in contact
+            self.agent._waitsleep(5/240, sleep=sleep)  # step several frames to stabilize object positions
+            self._stick()
         self.agent.move_in_cartesian(to_top_pos, orientation=quat2, t=self.traj_t, sleep=sleep)
         if get_images:
             images.append(utils.get_image(self._p, eye_position=eye_position, target_position=target_position,
@@ -494,6 +505,34 @@ class BlocksWorld_v4(BlocksWorld):
             return state1, effect, types, images
 
         return state1, effect, types
+
+    def _stick(self):
+        for _ in range(10):
+            poses = self.state_obj_poses()
+            for i in self.obj_dict:
+                for j in self.obj_dict:
+                    obj1_id = self.obj_dict[i]
+                    obj2_id = self.obj_dict[j]
+                    points = self._p.getContactPoints(bodyA=obj1_id, bodyB=obj2_id)
+                    if len(points) > 0:
+                        if self.color_dict[i] == self.color_dict[j]:
+                            if ((i, j) in self.constraints) or ((j, i) in self.constraints):
+                                continue
+
+                            world_to_i = self._p.invertTransform(poses[i][:3], poses[i][3:])
+                            j_to_i = self._p.multiplyTransforms(world_to_i[0], world_to_i[1],
+                                                                poses[j][:3], poses[j][3:])
+                            constraint = self._p.createConstraint(self.obj_dict[i], -1,
+                                                                  self.obj_dict[j], -1,
+                                                                  jointType=self._p.JOINT_FIXED,
+                                                                  jointAxis=(0, 0, 0),
+                                                                  parentFramePosition=j_to_i[0],
+                                                                  parentFrameOrientation=j_to_i[1],
+                                                                  childFramePosition=(0, 0, 0),
+                                                                  childFrameOrientation=(0, 0, 0, 1))
+                            # self._p.changeConstraint(constraint, maxForce=50)
+                            self.constraints[(i, j)] = constraint
+            self._p.stepSimulation()
 
     def _state_obj_poses_and_types(self):
         N_obj = len(self.obj_dict)
