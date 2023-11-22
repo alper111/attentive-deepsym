@@ -270,9 +270,9 @@ class GumbelAttention(torch.nn.Module):
         q = q.permute(0, 2, 1, 3)  # (batch, head, token, out_dim)
         k = (wk @ x).reshape(batch, token, self.num_heads, -1) * pad_mask
         k = k.permute(0, 2, 1, 3)  # (batch, head, token, out_dim)
-        attn = (q @ k.permute(0, 1, 3, 2)) / self._denom  # (batch, head, token, token)
-        attn = attn - self.bias
-        binarized_attn = gumbel_sigmoid(attn, temperature, hard)
+        logits = (q @ k.permute(0, 1, 3, 2)) / self._denom  # (batch, head, token, token)
+        logits = logits - self.bias
+        binarized_attn = gumbel_sigmoid(logits, temperature, hard)
         pad_mask = src_key_mask.reshape(batch, token, 1) @ src_key_mask.reshape(batch, 1, token)
         binarized_attn = binarized_attn * pad_mask.unsqueeze(1)
         return binarized_attn
@@ -302,9 +302,9 @@ class GumbelSoftmaxAttention(torch.nn.Module):
         src_key_mask : torch.Tensor
             shape (batch, token)
         temperature : float
-            temperature of gumbel sigmoid
+            temperature of gumbel softmax
         hard : bool
-            if True, use hard gumbel sigmoid
+            if True, use hard gumbel softmax
         Returns
         -------
         attn : torch.Tensor
@@ -321,12 +321,107 @@ class GumbelSoftmaxAttention(torch.nn.Module):
         q = q.permute(0, 2, 1, 3)  # (batch, head, token, out_dim)
         k = (wk @ x).reshape(batch, token, self.num_heads, -1) * pad_mask
         k = k.permute(0, 2, 1, 3)  # (batch, head, token, out_dim)
-        attn = (q @ k.permute(0, 1, 3, 2)) / self._denom  # (batch, head, token, token)
-        attn = attn - self.bias
-        binarized_attn = torch.nn.functional.gumbel_softmax(attn, tau=temperature, hard=hard, axis=-1)
+        logits = (q @ k.permute(0, 1, 3, 2)) / self._denom  # (batch, head, token, token)
+        logits = logits - self.bias
+        binarized_attn = torch.nn.functional.gumbel_softmax(logits, tau=temperature, hard=hard, axis=-1)
         pad_mask = src_key_mask.reshape(batch, token, 1) @ src_key_mask.reshape(batch, 1, token)
         binarized_attn = binarized_attn * pad_mask.unsqueeze(1)
         return binarized_attn
+
+
+class SoftmaxAttention(torch.nn.Module):
+    def __init__(self, in_dim, out_dim, num_heads):
+        super(SoftmaxAttention, self).__init__()
+        self.num_heads = num_heads
+        self.in_dim = in_dim
+        self.out_dim = out_dim
+        self._denom = math.sqrt(out_dim)
+        self.wq = torch.nn.Parameter(torch.nn.init.xavier_normal_(
+            torch.Tensor(num_heads, out_dim, in_dim)
+        ))
+        self.wk = torch.nn.Parameter(torch.nn.init.xavier_normal_(
+            torch.Tensor(num_heads, out_dim, in_dim)
+        ))
+        self.bias = torch.nn.Parameter(torch.zeros(1, num_heads, 1, 1))
+
+    def forward(self, x, src_key_mask=None):
+        """
+        Parameters
+        ----------
+        x : torch.Tensor
+            shape (batch, token, dim)
+        src_key_mask : torch.Tensor
+            shape (batch, token)
+        Returns
+        -------
+        attn : torch.Tensor
+            shape (batch, head, token, token)
+        """
+        if src_key_mask is None:
+            src_key_mask = torch.ones(x.shape[0], x.shape[1], dtype=torch.float, device=x.device)
+        batch, token, dim = x.shape
+        x = x.reshape(batch*token, 1, dim, 1)  # (batch*token, placeholder_for_head, in_dim, 1)
+        wq = self.wq.unsqueeze(0)  # (placeholder_for_batch, head, out_dim, in_dim)
+        wk = self.wk.unsqueeze(0)  # (placeholder_for_batch, head, out_dim, in_dim)
+        pad_mask = src_key_mask.reshape(batch, token, 1, 1)
+        q = (wq @ x).reshape(batch, token, self.num_heads, -1) * pad_mask
+        q = q.permute(0, 2, 1, 3)  # (batch, head, token, out_dim)
+        k = (wk @ x).reshape(batch, token, self.num_heads, -1) * pad_mask
+        k = k.permute(0, 2, 1, 3)  # (batch, head, token, out_dim)
+        logits = (q @ k.permute(0, 1, 3, 2)) / self._denom  # (batch, head, token, token)
+        logits = logits - self.bias
+        attn = torch.nn.functional.softmax(logits, axis=-1)
+        pad_mask = src_key_mask.reshape(batch, token, 1) @ src_key_mask.reshape(batch, 1, token)
+        attn = attn * pad_mask.unsqueeze(1)
+        return attn
+
+
+class SigmoidAttention(torch.nn.Module):
+    def __init__(self, in_dim, out_dim, num_heads):
+        super(SigmoidAttention, self).__init__()
+        self.num_heads = num_heads
+        self.in_dim = in_dim
+        self.out_dim = out_dim
+        self._denom = math.sqrt(out_dim)
+        self.wq = torch.nn.Parameter(torch.nn.init.xavier_normal_(
+            torch.Tensor(num_heads, out_dim, in_dim)
+        ))
+        self.wk = torch.nn.Parameter(torch.nn.init.xavier_normal_(
+            torch.Tensor(num_heads, out_dim, in_dim)
+        ))
+        self.bias = torch.nn.Parameter(torch.zeros(1, num_heads, 1, 1))
+
+    def forward(self, x, src_key_mask=None, temperature=1.0, hard=False):
+        """
+        Parameters
+        ----------
+        x : torch.Tensor
+            shape (batch, token, dim)
+        src_key_mask : torch.Tensor
+            shape (batch, token)
+        Returns
+        -------
+        attn : torch.Tensor
+            shape (batch, head, token, token)
+        """
+        if src_key_mask is None:
+            src_key_mask = torch.ones(x.shape[0], x.shape[1], dtype=torch.float, device=x.device)
+        batch, token, dim = x.shape
+        x = x.reshape(batch*token, 1, dim, 1)  # (batch*token, placeholder_for_head, in_dim, 1)
+        wq = self.wq.unsqueeze(0)  # (placeholder_for_batch, head, out_dim, in_dim)
+        wk = self.wk.unsqueeze(0)  # (placeholder_for_batch, head, out_dim, in_dim)
+        pad_mask = src_key_mask.reshape(batch, token, 1, 1)
+        q = (wq @ x).reshape(batch, token, self.num_heads, -1) * pad_mask
+        q = q.permute(0, 2, 1, 3)  # (batch, head, token, out_dim)
+        k = (wk @ x).reshape(batch, token, self.num_heads, -1) * pad_mask
+        k = k.permute(0, 2, 1, 3)  # (batch, head, token, out_dim)
+        logits = (q @ k.permute(0, 1, 3, 2)) / self._denom  # (batch, head, token, token)
+        logits = logits - self.bias
+        attn = torch.nn.functional.sigmoid(logits)
+        pad_mask = src_key_mask.reshape(batch, token, 1) @ src_key_mask.reshape(batch, 1, token)
+        attn = attn * pad_mask.unsqueeze(1)
+        return attn
+
 
 class STSigmoidAttention(torch.nn.Module):
     def __init__(self, in_dim, out_dim, num_heads):

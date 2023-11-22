@@ -208,10 +208,23 @@ class AttentiveDeepSym(DeepSym):
                          [config["hidden_dim"]]*config["n_hidden_layers"]
         self.pre_attention = blocks.MLP(pre_att_layers, batch_norm=config["batch_norm"])
 
-        if ("activation" in config) and (config["activation"] == "gumbel_softmax"):
-            self.attention = blocks.GumbelSoftmaxAttention(in_dim=config["hidden_dim"],
-                                                           out_dim=config["hidden_dim"],
-                                                           num_heads=config["n_attention_heads"])
+        if "activation" in config:
+            if config["activation"] == "gumbel_softmax":
+                self.attention = blocks.GumbelSoftmaxAttention(in_dim=config["hidden_dim"],
+                                                               out_dim=config["hidden_dim"],
+                                                               num_heads=config["n_attention_heads"])
+            elif config["activation"] == "gumbel_sigmoid":
+                self.attention = blocks.GumbelAttention(in_dim=config["hidden_dim"],
+                                                        out_dim=config["hidden_dim"],
+                                                        num_heads=config["n_attention_heads"])
+            elif config["activation"] == "softmax":
+                self.attention = blocks.SoftmaxAttention(in_dim=config["hidden_dim"],
+                                                         out_dim=config["hidden_dim"],
+                                                         num_heads=config["n_attention_heads"])
+            elif config["activation"] == "sigmoid":
+                self.attention = blocks.SigmoidAttention(in_dim=config["hidden_dim"],
+                                                         out_dim=config["hidden_dim"],
+                                                         num_heads=config["n_attention_heads"])
         else:
             self.attention = blocks.GumbelAttention(in_dim=config["hidden_dim"],
                                                     out_dim=config["hidden_dim"],
