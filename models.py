@@ -198,6 +198,7 @@ class AttentiveDeepSym(DeepSym):
         enc_layers = [config["state_dim"]] + \
                         [config["hidden_dim"]]*config["n_hidden_layers"] + \
                         [config["latent_dim"]]
+
         self.encoder = torch.nn.Sequential(
             blocks.MLP(enc_layers, batch_norm=config["batch_norm"]),
             blocks.GumbelSigmoidLayer(hard=config["gumbel_hard"],
@@ -206,9 +207,15 @@ class AttentiveDeepSym(DeepSym):
         pre_att_layers = [config["state_dim"]] + \
                          [config["hidden_dim"]]*config["n_hidden_layers"]
         self.pre_attention = blocks.MLP(pre_att_layers, batch_norm=config["batch_norm"])
-        self.attention = blocks.GumbelAttention(in_dim=config["hidden_dim"],
-                                                out_dim=config["hidden_dim"],
-                                                num_heads=config["n_attention_heads"])
+
+        if ("activation" in config) and (config["activation"] == "gumbel_softmax"):
+            self.attention = blocks.GumbelSoftmaxAttention(in_dim=config["hidden_dim"],
+                                                           out_dim=config["hidden_dim"],
+                                                           num_heads=config["n_attention_heads"])
+        else:
+            self.attention = blocks.GumbelAttention(in_dim=config["hidden_dim"],
+                                                    out_dim=config["hidden_dim"],
+                                                    num_heads=config["n_attention_heads"])
 
         post_enc_layers = [config["latent_dim"]+config["action_dim"]] + \
                           [config["hidden_dim"]]*config["n_hidden_layers"]
